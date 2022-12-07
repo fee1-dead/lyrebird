@@ -22,6 +22,7 @@ use serenity::{
     prelude::GatewayIntents,
     Result as SerenityResult,
 };
+use songbird::input::Metadata;
 
 struct Handler;
 
@@ -33,7 +34,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(deafen, join, leave, play, ping, undeafen, unmute, skip)]
+#[commands(deafen, join, leave, play, ping, undeafen, unmute, skip, queue)]
 struct General;
 
 #[tokio::main]
@@ -96,6 +97,38 @@ async fn deafen(ctx: &Context, msg: &Message) -> CommandResult {
 
         check_msg(msg.channel_id.say(&ctx.http, "Deafened").await);
     }
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild = msg.guild(&ctx.cache).unwrap();
+    let guild_id = guild.id;
+    let manager = songbird::get(ctx).await
+        .expect("Songbird Voice client placed in at initialisation.").clone();
+
+    let handler_lock = match manager.get(guild_id) {
+        Some(handler) => handler,
+        None => {
+            check_msg(msg.reply(ctx, "Not in a voice channel").await);
+
+            return Ok(());
+        },
+    };
+
+    let mut reply = String::new();
+    let handler = handler_lock.lock().await;
+    for (n, song) in handler.queue().current_queue().into_iter().enumerate() {
+        let Metadata { title, artist, .. } = song.metadata();
+        if !reply.is_empty() {
+            reply.push('\n');
+        }
+        reply.push_str(&format!("{n}: {} - {}", artist.as_deref().unwrap_or("unknown artist"), title.as_deref().unwrap_or("unknown title")));
+    }
+
+    check_msg(msg.reply(ctx, reply).await);
 
     Ok(())
 }
