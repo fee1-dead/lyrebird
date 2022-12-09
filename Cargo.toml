@@ -13,7 +13,7 @@ lazy_static = "1.4.0"
 
 [dependencies.songbird]
 version = "0.3.0"
-features = [ "builtin-queue" ]
+features = [ "builtin-queue", "yt-dlp" ]
 
 [dependencies.serenity]
 version = "0.11"
