@@ -37,7 +37,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(deafen, join, leave, play, ping, undeafen, unmute, skip, queue)]
+#[commands(deafen, join, leave, play, ping, undeafen, unmute, skip, queue, remove)]
 struct General;
 
 #[tokio::main]
