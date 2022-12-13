@@ -1,8 +1,10 @@
+use std::collections::VecDeque;
 use std::env;
 use std::future::Future;
 use std::sync::Arc;
 
 use serenity::prelude::Mutex;
+use songbird::tracks::Queued;
 // This trait adds the `register_songbird` and `register_songbird_with` methods
 // to the client builder below, making it easy to install this voice client.
 // The voice client can be retrieved in any command using `songbird::get(ctx).await`.
@@ -31,7 +33,7 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
     }
 }
@@ -190,19 +192,77 @@ async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
     }).await
 }
 
-#[command]
-#[only_in(guilds)]
-async fn splay(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let term = match args.single::<String>() {
-        Ok(term) => term,
+async fn queue_modify<F: FnOnce(usize, usize, &mut VecDeque<Queued>) -> String>(ctx: &Context, msg: &Message, mut args: Args, f: F) -> CommandResult {
+    let from = match args.single::<usize>() {
+        Ok(from) => from,
         Err(_) => {
-            check_msg(msg.channel_id.say(&ctx.http, "Must provide a term to search for").await);
+            check_msg(msg.channel_id.say(&ctx.http, "Must provide an index to move from").await);
 
             return Ok(());
         },
     };
 
+    let to = match args.single::<usize>() {
+        Ok(to) => to,
+        Err(_) => {
+            check_msg(msg.channel_id.say(&ctx.http, "Must provide an index to move to").await);
 
+            return Ok(());
+        },
+    };
+
+    if from == 0 || to == 0 {
+        check_msg(msg.channel_id.say(&ctx.http, "Cannot move the currently playing song").await);
+        return Ok(());
+    }
+
+    common_voice(ctx, msg, |handler_lock| async move {
+        let handler = handler_lock.lock().await;
+        let m = handler.queue().modify_queue(|x| {
+            f(from, to, x)
+        });
+        check_msg(msg.channel_id.say(&ctx.http, m).await);
+        Ok(())
+    }).await
+}
+
+#[command]
+#[min_args(2)]
+#[only_in(guilds)]
+async fn r#move(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    queue_modify(ctx, msg, args, |from, to, x| {
+        if let Some(song) = x.remove(from) {
+            if to > x.len() {
+                x.push_back(song);
+            } else {
+                x.insert(to, song);
+            }
+            "Sucess".into()
+        } else {
+            format!("Failed: index out of bounds for {from}")
+        }
+    }).await
+}
+
+#[command]
+#[min_args(2)]
+#[only_in(guilds)]
+async fn swap(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    queue_modify(ctx, msg, args, |from, to, x| {
+        if from >= x.len() || to >= x.len() {
+            format!("Failed: index out of bounds for {from} or {to}")
+        } else {
+            x.swap(from, to);
+            "Sucess".into()
+        }
+    }).await
+}
+
+#[command]
+#[only_in(guilds)]
+#[min_args(1)]
+async fn splay(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let term = args.rest();
     common_voice(ctx, msg, |handler_lock| async move {
         let mut handler = handler_lock.lock().await;
 
