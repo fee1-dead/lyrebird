@@ -37,7 +37,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(deafen, join, leave, play, ping, undeafen, unmute, skip, queue, remove)]
+#[commands(deafen, join, leave, splay, play, ping, undeafen, unmute, skip, queue, remove)]
 struct General;
 
 fn main() {
@@ -186,6 +186,38 @@ async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
             let _ = handler.queue().skip();
             check_msg(msg.channel_id.say(&ctx.http, "skipped song").await);
         }
+        Ok(())
+    }).await
+}
+
+#[command]
+#[only_in(guilds)]
+async fn splay(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let term = match args.single::<String>() {
+        Ok(term) => term,
+        Err(_) => {
+            check_msg(msg.channel_id.say(&ctx.http, "Must provide a term to search for").await);
+
+            return Ok(());
+        },
+    };
+
+
+    common_voice(ctx, msg, |handler_lock| async move {
+        let mut handler = handler_lock.lock().await;
+
+        let input = match Restartable::ytdl_search(term, true).await {
+            Ok(input) => input,
+            Err(why) => {
+                println!("Err starting source: {:?}", why);
+
+                check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
+
+                return Ok(());
+            },
+        };
+        handler.enqueue_source(input.into());
+        check_msg(msg.channel_id.say(&ctx.http, "Added to queue").await);
         Ok(())
     }).await
 }
