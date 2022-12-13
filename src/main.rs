@@ -25,7 +25,7 @@ use serenity::{
     prelude::GatewayIntents,
     Result as SerenityResult,
 };
-use songbird::input::Metadata;
+use songbird::input::{Metadata, Restartable};
 
 struct Handler;
 
@@ -40,8 +40,15 @@ impl EventHandler for Handler {
 #[commands(deafen, join, leave, play, ping, undeafen, unmute, skip, queue, remove)]
 struct General;
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(main_inner());
+}
+
+async fn main_inner() {
     tracing_subscriber::fmt::init();
     
     // Configure the client with your Discord bot token in the environment.
@@ -204,8 +211,8 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     common_voice(ctx, msg, |handler_lock| async move {
         let mut handler = handler_lock.lock().await;
 
-        let source = match songbird::ytdl(&url).await {
-            Ok(source) => source,
+        let input = match Restartable::ytdl(url, true).await {
+            Ok(input) => input,
             Err(why) => {
                 println!("Err starting source: {:?}", why);
 
@@ -214,8 +221,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 return Ok(());
             },
         };
-
-        handler.enqueue_source(source);
+        handler.enqueue_source(input.into());
         check_msg(msg.channel_id.say(&ctx.http, "Added to queue").await);
         Ok(())
     }).await
