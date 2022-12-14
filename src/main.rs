@@ -443,17 +443,21 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
 
         let mut reply = String::new();
         for (n, song) in handler.queue().current_queue().into_iter().enumerate() {
-            let Metadata { title, artist, .. } = song.metadata();
+            let Metadata { title, artist, duration, .. } = song.metadata();
             if !reply.is_empty() {
                 reply.push('\n');
             }
 
+            let duration = match duration {
+                Some(duration) => format_duration(*duration),
+                None => "unknown".into(),
+            };
+
             let (left, right) = if n == 0 {
                 let time = match song.get_info().await {
                     Ok(info) => format!(
-                        " - {} / {}",
+                        " - {} / {duration}",
                         format_duration(info.position),
-                        format_duration(info.play_time)
                     ),
                     Err(_) => "- Error getting time".into(),
                 };
