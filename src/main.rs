@@ -9,7 +9,7 @@ use songbird::tracks::Queued;
 // This trait adds the `register_songbird` and `register_songbird_with` methods
 // to the client builder below, making it easy to install this voice client.
 // The voice client can be retrieved in any command using `songbird::get(ctx).await`.
-use songbird::{SerenityInit, Call};
+use songbird::{Call, SerenityInit};
 
 // Import the `Context` to handle commands.
 use serenity::client::Context;
@@ -18,11 +18,11 @@ use serenity::{
     async_trait,
     client::{Client, EventHandler},
     framework::{
-        StandardFramework,
         standard::{
-            Args, CommandResult,
             macros::{command, group},
+            Args, CommandResult,
         },
+        StandardFramework,
     },
     model::{channel::Message, gateway::Ready},
     prelude::GatewayIntents,
@@ -40,7 +40,9 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(deafen, join, leave, splay, play, ping, undeafen, unmute, skip, queue, remove)]
+#[commands(
+    deafen, join, leave, splay, play, ping, undeafen, unmute, skip, queue, remove
+)]
 struct General;
 
 fn main() {
@@ -65,18 +67,15 @@ impl CommandCommon<'_> {
 
 async fn main_inner() {
     tracing_subscriber::fmt::init();
-    
+
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN")
-        .expect("Expected a token in the environment");
+    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
     let framework = StandardFramework::new()
-        .configure(|c| c
-                   .prefix("~"))
+        .configure(|c| c.prefix("~"))
         .group(&GENERAL_GROUP);
 
-    let intents = GatewayIntents::non_privileged()
-        | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler)
@@ -86,28 +85,47 @@ async fn main_inner() {
         .expect("Err creating client");
 
     tokio::spawn(async move {
-        let _ = client.start().await.map_err(|why| println!("Client ended: {:?}", why));
+        let _ = client
+            .start()
+            .await
+            .map_err(|why| println!("Client ended: {:?}", why));
     });
-    
+
     let _ = tokio::signal::ctrl_c().await;
     println!("Received Ctrl-C, shutting down.");
 }
 
-
-async fn common_voice<F: FnOnce(Arc<Mutex<Call>>) -> T, T: Future<Output = CommandResult>>(ctx: &Context, msg: &Message, f: F) -> CommandResult {
+async fn common_voice<F: FnOnce(Arc<Mutex<Call>>) -> T, T: Future<Output = CommandResult>>(
+    ctx: &Context,
+    msg: &Message,
+    autojoin: bool,
+    f: F,
+) -> CommandResult {
     let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
 
-    let handler_lock = match manager.get(guild_id) {
-        Some(handler) => handler,
-        None => {
-            check_msg(msg.reply(ctx, "Not in a voice channel").await);
+    let handler_lock = if autojoin {
+        match try_join(ctx, msg, false).await {
+            Ok(x) => x,
+            Err(e) => {
+                check_msg(msg.reply(ctx, format!("Failed: {:?}", e)).await);
+                return Ok(());
+            }
+        }
+    } else {
+        match manager.get(guild_id) {
+            Some(handler) => handler,
+            None => {
+                check_msg(msg.reply(ctx, "Not in a voice channel").await);
 
-            return Ok(());
-        },
+                return Ok(());
+            }
+        }
     };
 
     f(handler_lock).await
@@ -116,28 +134,39 @@ async fn common_voice<F: FnOnce(Arc<Mutex<Call>>) -> T, T: Future<Output = Comma
 #[command]
 #[only_in(guilds)]
 async fn deafen(ctx: &Context, msg: &Message) -> CommandResult {
-    common_voice(ctx, msg, |handler| async move {
+    common_voice(ctx, msg, false, |handler| async move {
         let mut handler = handler.lock().await;
         if handler.is_deaf() {
             check_msg(msg.channel_id.say(&ctx.http, "Already deafened").await);
         } else {
             if let Err(e) = handler.deafen(true).await {
-                check_msg(msg.channel_id.say(&ctx.http, format!("Failed: {:?}", e)).await);
+                check_msg(
+                    msg.channel_id
+                        .say(&ctx.http, format!("Failed: {:?}", e))
+                        .await,
+                );
             }
-    
+
             check_msg(msg.channel_id.say(&ctx.http, "Deafened").await);
         }
-    
+
         Ok(())
-    }).await
+    })
+    .await
 }
 
-async fn try_join(ctx: &Context, msg: &Message, must_join: bool) -> Result<Arc<Mutex<Call>>, &'static str> {
+async fn try_join(
+    ctx: &Context,
+    msg: &Message,
+    must_join: bool,
+) -> Result<Arc<Mutex<Call>>, &'static str> {
     let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
 
     if let Some(call) = manager.get(guild_id) {
         if must_join {
@@ -148,7 +177,8 @@ async fn try_join(ctx: &Context, msg: &Message, must_join: bool) -> Result<Arc<M
     }
 
     let channel_id = guild
-        .voice_states.get(&msg.author.id)
+        .voice_states
+        .get(&msg.author.id)
         .and_then(|voice_state| voice_state.channel_id);
 
     let connect_to = match channel_id {
@@ -183,13 +213,19 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
     let has_handler = manager.get(guild_id).is_some();
 
     if has_handler {
         if let Err(e) = manager.remove(guild_id).await {
-            check_msg(msg.channel_id.say(&ctx.http, format!("Failed: {:?}", e)).await);
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, format!("Failed: {:?}", e))
+                    .await,
+            );
         }
 
         check_msg(msg.channel_id.say(&ctx.http, "Left voice channel").await);
@@ -199,7 +235,6 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 
     Ok(())
 }
-
 
 #[command]
 async fn ping(context: &Context, msg: &Message) -> CommandResult {
@@ -211,7 +246,7 @@ async fn ping(context: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
-    common_voice(ctx, msg, |handler_lock| async move {
+    common_voice(ctx, msg, false, |handler_lock| async move {
         let handler = handler_lock.lock().await;
         if handler.queue().is_empty() {
             check_msg(msg.channel_id.say(ctx, "already skipped").await);
@@ -220,41 +255,58 @@ async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
             check_msg(msg.channel_id.say(&ctx.http, "skipped song").await);
         }
         Ok(())
-    }).await
+    })
+    .await
 }
 
-async fn queue_modify<F: FnOnce(usize, usize, &mut VecDeque<Queued>) -> String>(ctx: &Context, msg: &Message, mut args: Args, f: F) -> CommandResult {
+async fn queue_modify<F: FnOnce(usize, usize, &mut VecDeque<Queued>) -> String>(
+    ctx: &Context,
+    msg: &Message,
+    mut args: Args,
+    f: F,
+) -> CommandResult {
     let from = match args.single::<usize>() {
         Ok(from) => from,
         Err(_) => {
-            check_msg(msg.channel_id.say(&ctx.http, "Must provide an index to move from").await);
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, "Must provide an index to move from")
+                    .await,
+            );
 
             return Ok(());
-        },
+        }
     };
 
     let to = match args.single::<usize>() {
         Ok(to) => to,
         Err(_) => {
-            check_msg(msg.channel_id.say(&ctx.http, "Must provide an index to move to").await);
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, "Must provide an index to move to")
+                    .await,
+            );
 
             return Ok(());
-        },
+        }
     };
 
     if from == 0 || to == 0 {
-        check_msg(msg.channel_id.say(&ctx.http, "Cannot move the currently playing song").await);
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, "Cannot move the currently playing song")
+                .await,
+        );
         return Ok(());
     }
 
-    common_voice(ctx, msg, |handler_lock| async move {
+    common_voice(ctx, msg, false, |handler_lock| async move {
         let handler = handler_lock.lock().await;
-        let m = handler.queue().modify_queue(|x| {
-            f(from, to, x)
-        });
+        let m = handler.queue().modify_queue(|x| f(from, to, x));
         check_msg(msg.channel_id.say(&ctx.http, m).await);
         Ok(())
-    }).await
+    })
+    .await
 }
 
 #[command]
@@ -272,7 +324,8 @@ async fn r#move(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         } else {
             format!("Failed: index out of bounds for {from}")
         }
-    }).await
+    })
+    .await
 }
 
 #[command]
@@ -286,7 +339,8 @@ async fn swap(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             x.swap(from, to);
             "Sucess".into()
         }
-    }).await
+    })
+    .await
 }
 
 #[command]
@@ -294,7 +348,7 @@ async fn swap(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[min_args(1)]
 async fn splay(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let term = args.rest();
-    common_voice(ctx, msg, |handler_lock| async move {
+    common_voice(ctx, msg, true, |handler_lock| async move {
         let mut handler = handler_lock.lock().await;
 
         let input = match Restartable::ytdl_search(term, true).await {
@@ -305,12 +359,13 @@ async fn splay(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
 
                 return Ok(());
-            },
+            }
         };
         handler.enqueue_source(input.into());
         check_msg(msg.channel_id.say(&ctx.http, "Added to queue").await);
         Ok(())
-    }).await
+    })
+    .await
 }
 
 #[command]
@@ -319,19 +374,27 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let url = match args.single::<String>() {
         Ok(url) => url,
         Err(_) => {
-            check_msg(msg.channel_id.say(&ctx.http, "Must provide a URL to a video or audio").await);
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, "Must provide a URL to a video or audio")
+                    .await,
+            );
 
             return Ok(());
-        },
+        }
     };
 
     if !url.starts_with("http") {
-        check_msg(msg.channel_id.say(&ctx.http, "Must provide a valid URL").await);
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, "Must provide a valid URL")
+                .await,
+        );
 
         return Ok(());
     }
 
-    common_voice(ctx, msg, |handler_lock| async move {
+    common_voice(ctx, msg, true, |handler_lock| async move {
         let mut handler = handler_lock.lock().await;
 
         let input = match Restartable::ytdl(url, true).await {
@@ -342,12 +405,13 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
 
                 return Ok(());
-            },
+            }
         };
         handler.enqueue_source(input.into());
         check_msg(msg.channel_id.say(&ctx.http, "Added to queue").await);
         Ok(())
-    }).await
+    })
+    .await
 }
 
 fn format_duration(x: Duration) -> String {
@@ -368,7 +432,7 @@ fn format_duration(x: Duration) -> String {
 #[command]
 #[only_in(guilds)]
 async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
-    common_voice(ctx, msg, |handler| async move {
+    common_voice(ctx, msg, false, |handler| async move {
         let handler = handler.lock().await;
 
         if handler.queue().is_empty() {
@@ -386,7 +450,11 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
 
             let (left, right) = if n == 0 {
                 let time = match song.get_info().await {
-                    Ok(info) => format!(" - {} / {}", format_duration(info.position), format_duration(info.play_time)),
+                    Ok(info) => format!(
+                        " - {} / {}",
+                        format_duration(info.position),
+                        format_duration(info.play_time)
+                    ),
                     Err(_) => "- Error getting time".into(),
                 };
                 ("**Now Playing**".into(), time)
@@ -394,13 +462,18 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
                 (n.to_string(), String::new())
             };
 
-            reply.push_str(&format!("{left}: {} - {}{right}", artist.as_deref().unwrap_or("unknown artist"), title.as_deref().unwrap_or("unknown title")));
+            reply.push_str(&format!(
+                "{left}: {} - {}{right}",
+                artist.as_deref().unwrap_or("unknown artist"),
+                title.as_deref().unwrap_or("unknown title")
+            ));
         }
-    
+
         check_msg(msg.reply(ctx, reply).await);
 
         Ok(())
-    }).await
+    })
+    .await
 }
 
 #[command]
@@ -409,13 +482,17 @@ async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let index = match args.single::<usize>() {
         Ok(index) => index,
         Err(_) => {
-            check_msg(msg.channel_id.say(&ctx.http, "Must provide a valid index").await);
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, "Must provide a valid index")
+                    .await,
+            );
 
             return Ok(());
-        },
+        }
     };
 
-    common_voice(ctx, msg, |handler| async move {
+    common_voice(ctx, msg, false, |handler| async move {
         let handler = handler.lock().await;
 
         let message = handler.queue().modify_queue(|x| {
@@ -423,7 +500,10 @@ async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 if let Err(e) = track.stop() {
                     format!("Failed to stop track: {:?}", e)
                 } else {
-                    format!("Removed track: {}", track.metadata().title.as_deref().unwrap_or("unknown title"))
+                    format!(
+                        "Removed track: {}",
+                        track.metadata().title.as_deref().unwrap_or("unknown title")
+                    )
                 }
             } else {
                 format!("No track at index {}", index)
@@ -433,36 +513,47 @@ async fn remove(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         check_msg(msg.channel_id.say(&ctx.http, message).await);
 
         Ok(())
-    }).await
+    })
+    .await
 }
 
 #[command]
 #[only_in(guilds)]
 async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
-    common_voice(ctx, msg, |handler_lock| async move {
+    common_voice(ctx, msg, false, |handler_lock| async move {
         let mut handler = handler_lock.lock().await;
         if let Err(e) = handler.deafen(false).await {
-            check_msg(msg.channel_id.say(&ctx.http, format!("Failed: {:?}", e)).await);
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, format!("Failed: {:?}", e))
+                    .await,
+            );
         }
 
         check_msg(msg.channel_id.say(&ctx.http, "Undeafened").await);
 
         Ok(())
-    }).await
+    })
+    .await
 }
 
 #[command]
 #[only_in(guilds)]
 async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
-    common_voice(ctx, msg, |handler_lock| async move {
+    common_voice(ctx, msg, false, |handler_lock| async move {
         let mut handler = handler_lock.lock().await;
         if let Err(e) = handler.mute(false).await {
-            check_msg(msg.channel_id.say(&ctx.http, format!("Failed: {:?}", e)).await);
+            check_msg(
+                msg.channel_id
+                    .say(&ctx.http, format!("Failed: {:?}", e))
+                    .await,
+            );
         }
 
         check_msg(msg.channel_id.say(&ctx.http, "Unmuted").await);
         Ok(())
-    }).await
+    })
+    .await
 }
 
 /// Checks that a message successfully sent; if not, then logs why to stdout.
