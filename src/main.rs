@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::env;
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use serenity::prelude::Mutex;
 use songbird::tracks::Queued;
@@ -33,7 +34,7 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, ready: Ready) {
+    async fn ready(&self, _: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
     }
 }
@@ -48,6 +49,18 @@ fn main() {
         .build()
         .unwrap()
         .block_on(main_inner());
+}
+
+pub struct CommandCommon<'a> {
+    context: &'a Context,
+    message: &'a Message,
+    pub args: Args,
+}
+
+impl CommandCommon<'_> {
+    pub async fn reply(&self, content: &str) -> SerenityResult<Message> {
+        self.message.reply(self.context, content).await
+    }
 }
 
 async fn main_inner() {
@@ -119,11 +132,20 @@ async fn deafen(ctx: &Context, msg: &Message) -> CommandResult {
     }).await
 }
 
-#[command]
-#[only_in(guilds)]
-async fn join(ctx: &Context, msg: &Message) -> CommandResult {
+async fn try_join(ctx: &Context, msg: &Message, must_join: bool) -> Result<Arc<Mutex<Call>>, &'static str> {
     let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
+
+    let manager = songbird::get(ctx).await
+        .expect("Songbird Voice client placed in at initialisation.").clone();
+
+    if let Some(call) = manager.get(guild_id) {
+        if must_join {
+            return Err("already in a voice channel");
+        } else {
+            return Ok(call);
+        }
+    }
 
     let channel_id = guild
         .voice_states.get(&msg.author.id)
@@ -132,16 +154,25 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     let connect_to = match channel_id {
         Some(channel) => channel,
         None => {
-            check_msg(msg.reply(ctx, "Not in a voice channel").await);
-
-            return Ok(());
+            return Err("you are not in a voice channel");
         }
     };
 
-    let manager = songbird::get(ctx).await
-        .expect("Songbird Voice client placed in at initialisation.").clone();
+    let (call, _) = manager.join(guild_id, connect_to).await;
 
-    let _handler = manager.join(guild_id, connect_to).await;
+    Ok(call)
+}
+
+#[command]
+#[only_in(guilds)]
+async fn join(ctx: &Context, msg: &Message) -> CommandResult {
+    if let Err(why) = try_join(ctx, msg, true).await {
+        check_msg(msg.reply(ctx, format!("Failed to join: {why}")).await);
+    } else {
+        if let Err(e) = msg.react(ctx, '👌').await {
+            println!("Failed to react: {:?}", e);
+        }
+    }
 
     Ok(())
 }
@@ -319,11 +350,32 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     }).await
 }
 
+fn format_duration(x: Duration) -> String {
+    let secs = x.as_secs();
+    let mins = secs / 60;
+    let hours = mins / 60;
+    let mins = mins % 60;
+    let secs = secs % 60;
+    if hours > 0 {
+        format!("{}:{:02}:{:02}", hours, mins, secs)
+    } else if mins > 0 {
+        format!("{}:{:02}", mins, secs)
+    } else {
+        format!("{}s", secs)
+    }
+}
+
 #[command]
 #[only_in(guilds)]
 async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
     common_voice(ctx, msg, |handler| async move {
         let handler = handler.lock().await;
+
+        if handler.queue().is_empty() {
+            check_msg(msg.channel_id.say(&ctx.http, "Queue is empty").await);
+
+            return Ok(());
+        }
 
         let mut reply = String::new();
         for (n, song) in handler.queue().current_queue().into_iter().enumerate() {
@@ -331,7 +383,18 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
             if !reply.is_empty() {
                 reply.push('\n');
             }
-            reply.push_str(&format!("{n}: {} - {}", artist.as_deref().unwrap_or("unknown artist"), title.as_deref().unwrap_or("unknown title")));
+
+            let (left, right) = if n == 0 {
+                let time = match song.get_info().await {
+                    Ok(info) => format!(" - {} / {}", format_duration(info.position), format_duration(info.play_time)),
+                    Err(_) => "- Error getting time".into(),
+                };
+                ("**Now Playing**".into(), time)
+            } else {
+                (n.to_string(), String::new())
+            };
+
+            reply.push_str(&format!("{left}: {} - {}{right}", artist.as_deref().unwrap_or("unknown artist"), title.as_deref().unwrap_or("unknown title")));
         }
     
         check_msg(msg.reply(ctx, reply).await);
