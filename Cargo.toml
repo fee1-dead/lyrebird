@@ -12,7 +12,7 @@ lazy_static = "1.4.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.songbird]
-version = "0.3.0"
+git = "https://github.com/serenity-rs/songbird.git"
 features = [ "builtin-queue", "yt-dlp" ]
 
 [dependencies.serenity]
