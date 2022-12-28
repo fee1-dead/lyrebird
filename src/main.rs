@@ -28,7 +28,7 @@ use serenity::{
     prelude::GatewayIntents,
     Result as SerenityResult,
 };
-use songbird::input::{Metadata, Restartable};
+use songbird::input::{Metadata, Restartable, Input};
 
 struct Handler;
 
@@ -361,8 +361,10 @@ async fn splay(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 return Ok(());
             }
         };
-        handler.enqueue_source(input.into());
-        check_msg(msg.channel_id.say(&ctx.http, "Added to queue").await);
+        let source: Input = input.into();
+        let track = format_metadata(&source.metadata);
+        handler.enqueue_source(source);
+        check_msg(msg.reply(ctx, format!("Queued {track}.")).await);
         Ok(())
     })
     .await
@@ -414,6 +416,14 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     .await
 }
 
+fn format_metadata(Metadata { title, artist, .. }: &Metadata) -> String {
+    format!(
+        "{} - {}",
+        artist.as_deref().unwrap_or("unknown artist"),
+        title.as_deref().unwrap_or("unknown title")
+    )
+}
+
 fn format_duration(x: Duration) -> String {
     let secs = x.as_secs();
     let mins = secs / 60;
@@ -443,7 +453,8 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
 
         let mut reply = String::new();
         for (n, song) in handler.queue().current_queue().into_iter().enumerate() {
-            let Metadata { title, artist, duration, .. } = song.metadata();
+            let metadata = song.metadata();
+            let duration = &metadata.duration;
             if !reply.is_empty() {
                 reply.push('\n');
             }
@@ -467,9 +478,8 @@ async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
             };
 
             reply.push_str(&format!(
-                "{left}: {} - {}{right}",
-                artist.as_deref().unwrap_or("unknown artist"),
-                title.as_deref().unwrap_or("unknown title")
+                "{left}: {}{right}",
+                format_metadata(metadata),
             ));
         }
 
