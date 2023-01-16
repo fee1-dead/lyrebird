@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use serenity::builder::CreateApplicationCommands;
 use serenity::futures::future::BoxFuture;
-use serenity::model::prelude::command::Command;
 use serenity::model::prelude::interaction::application_command::{
     ApplicationCommandInteraction, CommandDataOption, CommandDataOptionValue as Val,
 };
