@@ -94,7 +94,7 @@ fn register_commands(c: &mut CreateApplicationCommands) -> &mut CreateApplicatio
     })
     .create_application_command(|c| {
         c.name("splay")
-            .create_option(|x| x.name("query").required(true).kind(String))
+            .create_option(|x| x.name("query").description("search query").required(true).kind(String))
     })
     .create_application_command(|c| c.name("join"))
     .create_application_command(|c| c.name("leave"))
@@ -102,18 +102,18 @@ fn register_commands(c: &mut CreateApplicationCommands) -> &mut CreateApplicatio
     .create_application_command(|c| c.name("deafen"))
     .create_application_command(|c| {
         c.name("swap")
-            .create_option(|x| x.name("a").required(true).kind(Integer))
-            .create_option(|x| x.name("b").required(true).kind(Integer))
+            .create_option(|x| x.name("a").description("index to swap").required(true).kind(Integer))
+            .create_option(|x| x.name("b").description("index to swap").required(true).kind(Integer))
     })
     .create_application_command(|c| {
         c.name("mv")
-            .create_option(|x| x.name("from").required(true).kind(Integer))
-            .create_option(|x| x.name("to").required(true).kind(Integer))
+            .create_option(|x| x.name("from").description("index to move from").required(true).kind(Integer))
+            .create_option(|x| x.name("to").description("index to move to").required(true).kind(Integer))
     })
     .create_application_command(|c| c.name("skip"))
     .create_application_command(|c| {
         c.name("remove")
-            .create_option(|x| x.name("index").required(true).kind(Integer))
+            .create_option(|x| x.name("index").description("index of music to remove").required(true).kind(Integer))
     })
     .create_application_command(|c| c.name("pause"))
     .create_application_command(|c| c.name("resume"))
