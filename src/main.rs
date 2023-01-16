@@ -12,7 +12,7 @@ use serenity::model::prelude::interaction::application_command::{
     ApplicationCommandInteraction, CommandDataOption, CommandDataOptionValue as Val,
 };
 use serenity::model::prelude::interaction::Interaction;
-use serenity::model::prelude::{Activity, Guild, UserId, GuildId};
+use serenity::model::prelude::{Activity, Guild, GuildId, UserId};
 use serenity::model::user::OnlineStatus;
 use serenity::prelude::Mutex;
 use songbird::tracks::Queued;
@@ -44,7 +44,10 @@ impl EventHandler for Handler {
         info!("{} is connected!", ready.user.name);
         ctx.set_presence(Some(Activity::watching("you")), OnlineStatus::Online)
             .await;
-        GuildId(1051160112036851733).set_application_commands(ctx, register_commands).await.unwrap();
+        GuildId(1051160112036851733)
+            .set_application_commands(ctx, register_commands)
+            .await
+            .unwrap();
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
