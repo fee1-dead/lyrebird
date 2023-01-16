@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::env;
+use std::error::Error;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,13 +27,14 @@ use serenity::client::Context;
 use serenity::{
     async_trait,
     client::{Client, EventHandler},
-    framework::standard::CommandResult,
     model::gateway::Ready,
     prelude::GatewayIntents,
 };
 use songbird::input::{Input, Metadata, Restartable};
 
 use tracing::{info, warn};
+
+pub type CommandResult = std::result::Result<(), Box<dyn Error + Send + Sync>>;
 
 struct Handler;
 

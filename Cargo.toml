@@ -18,4 +18,5 @@ features = [ "builtin-queue", "yt-dlp" ]
 
 [dependencies.serenity]
 version = "0.11"
-features = ["client", "voice", "rustls_backend"]
+default-features = false
+features = ["client", "model", "cache", "voice", "rustls_backend"]
