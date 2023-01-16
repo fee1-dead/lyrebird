@@ -93,12 +93,14 @@ fn register_commands(c: &mut CreateApplicationCommands) -> &mut CreateApplicatio
             })
     })
     .create_application_command(|c| {
-        c.name("splay").create_option(|x| {
-            x.name("query")
-                .description("search query")
-                .required(true)
-                .kind(String)
-        })
+        c.name("splay")
+            .description("search for song to play")
+            .create_option(|x| {
+                x.name("query")
+                    .description("search query")
+                    .required(true)
+                    .kind(String)
+            })
     })
     .create_application_command(|c| c.name("join").description("join voice channel"))
     .create_application_command(|c| c.name("leave").description("leave voice channel"))
@@ -106,6 +108,7 @@ fn register_commands(c: &mut CreateApplicationCommands) -> &mut CreateApplicatio
     .create_application_command(|c| c.name("deafen").description("deafen"))
     .create_application_command(|c| {
         c.name("swap")
+            .description("swap two tracks")
             .create_option(|x| {
                 x.name("a")
                     .description("index to swap")
@@ -121,6 +124,7 @@ fn register_commands(c: &mut CreateApplicationCommands) -> &mut CreateApplicatio
     })
     .create_application_command(|c| {
         c.name("mv")
+            .description("move music")
             .create_option(|x| {
                 x.name("from")
                     .description("index to move from")
@@ -136,12 +140,14 @@ fn register_commands(c: &mut CreateApplicationCommands) -> &mut CreateApplicatio
     })
     .create_application_command(|c| c.name("skip").description("skip music"))
     .create_application_command(|c| {
-        c.name("remove").create_option(|x| {
-            x.name("index")
-                .description("index of music to remove")
-                .required(true)
-                .kind(Integer)
-        })
+        c.name("remove")
+            .description("remove track")
+            .create_option(|x| {
+                x.name("index")
+                    .description("index of music to remove")
+                    .required(true)
+                    .kind(Integer)
+            })
     })
     .create_application_command(|c| c.name("pause").description("pause currently playing music"))
     .create_application_command(|c| c.name("resume").description("resume playing current music"))
