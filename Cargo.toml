@@ -23,3 +23,6 @@ git = "https://github.com/serenity-rs/serenity"
 branch = "next"
 default-features = false
 features = ["client", "model", "cache", "voice", "rustls_backend"]
+
+[dependencies.symphonia]
+features = ["aac", "mp3", "isomp4", "alac"]
