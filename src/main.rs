@@ -2,23 +2,26 @@ use std::collections::VecDeque;
 use std::env;
 use std::error::Error;
 use std::future::Future;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serenity::builder::CreateApplicationCommands;
-use serenity::futures::future::BoxFuture;
-use serenity::model::prelude::interaction::application_command::{
-    ApplicationCommandInteraction, CommandDataOption, CommandDataOptionValue as Val,
+use serenity::all::{CommandDataOption, CommandDataOptionValue as Val, CommandInteraction, Interaction};
+use serenity::builder::{
+    CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse,
 };
-use serenity::model::prelude::interaction::Interaction;
+use serenity::cache::GuildRef;
+use serenity::futures::future::BoxFuture;
+use serenity::gateway::ActivityData;
 use serenity::model::prelude::{Activity, Guild, GuildId, UserId};
 use serenity::model::user::OnlineStatus;
 use serenity::prelude::Mutex;
 use songbird::tracks::Queued;
+use songbird::typemap::TypeMapKey;
 // This trait adds the `register_songbird` and `register_songbird_with` methods
 // to the client builder below, making it easy to install this voice client.
 // The voice client can be retrieved in any command using `songbird::get(ctx).await`.
-use songbird::{Call, SerenityInit};
+use songbird::{Call, SerenityInit, Event, TrackEvent};
 
 // Import the `Context` to handle commands.
 use serenity::client::Context;
@@ -29,34 +32,37 @@ use serenity::{
     model::gateway::Ready,
     prelude::GatewayIntents,
 };
-use songbird::input::{Input, Metadata, Restartable};
+use songbird::input::{AuxMetadata, Input, YoutubeDl};
 
 use tracing::{info, warn};
 
 pub type CommandResult = std::result::Result<(), Box<dyn Error + Send + Sync>>;
 
-struct Handler;
+struct Handler {
+    client: reqwest::Client,
+}
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
-        ctx.set_presence(Some(Activity::watching("you")), OnlineStatus::Online)
-            .await;
-        GuildId(1051160112036851733)
-            .set_application_commands(ctx, register_commands)
+        ctx.set_presence(Some(ActivityData::watching("you")), OnlineStatus::Online);
+        GuildId(NonZeroU64::new(1051160112036851733).unwrap())
+            .set_application_commands(ctx, register_commands())
             .await
             .unwrap();
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::ApplicationCommand(command) = interaction {
+        if let Interaction::Command(command) = interaction {
             info!("Received command interaction: {:#?}", command);
 
             macro_rules! commands {
-                ($($name:ident),*$(,)?) => {
+                (@opt($s:ident, $l: literal)) => ($l);
+                (@opt($s:ident)) => (stringify!($s));
+                ($($name:ident$([$s: literal])?),*$(,)?) => {
                     match command.data.name.as_str() {
                         $(
-                            stringify!($name) => $name(&ctx, command).await,
+                            commands!(@opt($name$(, $s)?)) => $name(&ctx, self, command).await,
                         )*
                         _ => unreachable!(),
                     }
@@ -64,7 +70,7 @@ impl EventHandler for Handler {
             }
 
             if let Err(e) = commands! {
-                play, splay, join, leave, deafen, undeafen, mv, swap, skip, remove, pause, resume, queue,
+                play, splay, join, leave, deafen, undeafen, mv["move"], swap, skip, remove, pause, resume, queue,
             } {
                 warn!(%e, "error handling command")
             }
@@ -79,86 +85,47 @@ fn main() {
         .block_on(main_inner());
 }
 
-fn register_commands(c: &mut CreateApplicationCommands) -> &mut CreateApplicationCommands {
-    use serenity::model::prelude::command::CommandOptionType::*;
+fn register_commands() -> Vec<CreateCommand> {
+    use serenity::model::prelude::CommandOptionType::*;
 
-    c.create_application_command(|c| {
-        c.name("play")
+    vec![
+        CreateCommand::new("play")
             .description("queues a song to play")
-            .create_option(|x| {
-                x.name("url")
-                    .description("URL of the song")
-                    .required(true)
-                    .kind(String)
-            })
-    })
-    .create_application_command(|c| {
-        c.name("splay")
-            .description("search for song to play")
-            .create_option(|x| {
-                x.name("query")
-                    .description("search query")
-                    .required(true)
-                    .kind(String)
-            })
-    })
-    .create_application_command(|c| c.name("join").description("join voice channel"))
-    .create_application_command(|c| c.name("leave").description("leave voice channel"))
-    .create_application_command(|c| c.name("undeafen").description("undeafen"))
-    .create_application_command(|c| c.name("deafen").description("deafen"))
-    .create_application_command(|c| {
-        c.name("swap")
+            .add_option(CreateCommandOption::new(String, "url", "url of the song").required(true)),
+        CreateCommand::new("splay")
+            .description("search for song")
+            .add_option(CreateCommandOption::new(String, "query", "search query").required(true)),
+        CreateCommand::new("join").description("join voice channel"),
+        CreateCommand::new("leave").description("leave voice channel"),
+        CreateCommand::new("undeafen").description("undeafen"),
+        CreateCommand::new("swap")
             .description("swap two tracks")
-            .create_option(|x| {
-                x.name("a")
-                    .description("index to swap")
-                    .required(true)
-                    .kind(Integer)
-            })
-            .create_option(|x| {
-                x.name("b")
-                    .description("index to swap")
-                    .required(true)
-                    .kind(Integer)
-            })
-    })
-    .create_application_command(|c| {
-        c.name("mv")
-            .description("move music")
-            .create_option(|x| {
-                x.name("from")
-                    .description("index to move from")
-                    .required(true)
-                    .kind(Integer)
-            })
-            .create_option(|x| {
-                x.name("to")
-                    .description("index to move to")
-                    .required(true)
-                    .kind(Integer)
-            })
-    })
-    .create_application_command(|c| c.name("skip").description("skip music"))
-    .create_application_command(|c| {
-        c.name("remove")
+            .add_option(CreateCommandOption::new(Integer, "a", "swap from").required(true))
+            .add_option(CreateCommandOption::new(Integer, "b", "swap to").required(true)),
+        CreateCommand::new("move")
+            .description("move track")
+            .add_option(CreateCommandOption::new(Integer, "from", "move from").required(true))
+            .add_option(CreateCommandOption::new(Integer, "to", "move to").required(true)),
+        CreateCommand::new("skip").description("skip current track"),
+        CreateCommand::new("remove")
             .description("remove track")
-            .create_option(|x| {
-                x.name("index")
-                    .description("index of music to remove")
-                    .required(true)
-                    .kind(Integer)
-            })
-    })
-    .create_application_command(|c| c.name("pause").description("pause currently playing music"))
-    .create_application_command(|c| c.name("resume").description("resume playing current music"))
-    .create_application_command(|c| c.name("queue").description("list queue contents"))
+            .add_option(
+                CreateCommandOption::new(Integer, "index", "index to remove").required(true),
+            ),
+        CreateCommand::new("pause").description("pause current music"),
+        CreateCommand::new("resume").description("resume playing"),
+        CreateCommand::new("queue").description("list queue"),
+    ]
 }
 
-pub async fn simple_reply(c: &ApplicationCommandInteraction, ctx: &Context, message: &str) {
+pub async fn simple_reply(c: &CommandInteraction, ctx: &Context, message: &str) {
     if let Err(x) = c
-        .create_interaction_response(ctx, |x| {
-            x.interaction_response_data(|data| data.content(message))
-        })
+        .create_response(
+            ctx,
+            CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new().content(message),
+            ),
+        )
         .await
     {
         warn!(%x, %message, "unable to create command result");
@@ -174,7 +141,7 @@ async fn main_inner() {
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = Client::builder(&token, intents)
-        .event_handler(Handler)
+        .event_handler(Handler { client: reqwest::Client::new() })
         .register_songbird()
         .await
         .expect("Err creating client");
@@ -191,11 +158,11 @@ async fn main_inner() {
 }
 
 async fn common_voice<
-    F: FnOnce(Arc<Mutex<Call>>, ApplicationCommandInteraction) -> T,
+    F: FnOnce(Arc<Mutex<Call>>, CommandInteraction) -> T,
     T: Future<Output = CommandResult>,
 >(
     ctx: &Context,
-    c: ApplicationCommandInteraction,
+    c: CommandInteraction,
     autojoin: bool,
     f: F,
 ) -> CommandResult {
@@ -210,7 +177,7 @@ async fn common_voice<
         match try_join(
             ctx,
             c.user.id,
-            guild_id.to_guild_cached(ctx).unwrap(),
+            guild_id,
             false,
         )
         .await
@@ -236,7 +203,7 @@ async fn common_voice<
     f(handler_lock, c).await
 }
 
-async fn deafen(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn deafen(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     common_voice(ctx, c, false, |handler, c| async move {
         let mut handler = handler.lock().await;
         if handler.is_deaf() {
@@ -254,7 +221,7 @@ async fn deafen(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResul
     .await
 }
 
-async fn pause(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn pause(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     common_voice(ctx, c, false, |handler, c| async move {
         if let Err(e) = handler.lock().await.queue().pause() {
             warn!(?e, "failed to pause");
@@ -267,7 +234,7 @@ async fn pause(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult
     .await
 }
 
-async fn resume(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn resume(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     common_voice(ctx, c, false, |handler, c| async move {
         if let Err(e) = handler.lock().await.queue().resume() {
             warn!(?e, "failed to resume");
@@ -283,7 +250,7 @@ async fn resume(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResul
 async fn try_join(
     ctx: &Context,
     user: UserId,
-    guild: Guild,
+    guild: GuildId,
     must_join: bool,
 ) -> Result<Arc<Mutex<Call>>, &'static str> {
     let manager = songbird::get(ctx)
@@ -291,7 +258,7 @@ async fn try_join(
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
 
-    if let Some(call) = manager.get(guild.id) {
+    if let Some(call) = manager.get(guild) {
         if must_join {
             return Err("already in a voice channel");
         } else {
@@ -299,7 +266,7 @@ async fn try_join(
         }
     }
 
-    let channel_id = guild
+    let channel_id = guild.to_guild_cached(ctx).unwrap()
         .voice_states
         .get(&user)
         .and_then(|voice_state| voice_state.channel_id);
@@ -311,29 +278,38 @@ async fn try_join(
         }
     };
 
-    let (call, _) = manager.join(guild.id, connect_to).await;
+    let handler = manager
+        .join(guild, connect_to)
+        .await
+        .map_err(|_x| "songbird error")?;
 
-    Ok(call)
+    // TODO: on first join we need to install some event handlers
+    // h.lock().await.add_global_event(Event::Track(TrackEvent::Play), action);
+
+    Ok(handler)
 }
 
-async fn join(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
-    if let Err(why) = try_join(
+async fn join(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
+    match try_join(
         ctx,
         c.user.id,
-        c.guild_id.unwrap().to_guild_cached(ctx).unwrap(),
+        c.guild_id.unwrap(),
         true,
     )
-    .await
-    {
-        simple_reply(&c, ctx, &format!("Failed to join: {why}")).await;
-    } else {
-        simple_reply(&c, ctx, "joined").await;
-    }
+    .await {
+        Ok(_) => {
+            simple_reply(&c, ctx, "Joined").await;
+        }
+        Err(e) => {
+            simple_reply(&c, ctx, &format!("failed to join: {e}")).await;
 
+            return Ok(());
+        }
+    }
     Ok(())
 }
 
-async fn leave(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn leave(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     let guild_id = c.guild_id.unwrap();
 
     let manager = songbird::get(ctx)
@@ -355,7 +331,7 @@ async fn leave(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult
     Ok(())
 }
 
-async fn skip(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn skip(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     common_voice(ctx, c, false, |handler_lock, c| async move {
         let handler = handler_lock.lock().await;
         if handler.queue().is_empty() {
@@ -371,15 +347,15 @@ async fn skip(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult 
 
 async fn queue_modify<F: FnOnce(usize, usize, &mut VecDeque<Queued>) -> String>(
     ctx: &Context,
-    c: ApplicationCommandInteraction,
+    c: CommandInteraction,
     f: F,
 ) -> CommandResult {
     let (from, to) = match &*c.data.options {
         [CommandDataOption {
-            resolved: Some(Val::Integer(from)),
+            value: Val::Integer(from),
             ..
         }, CommandDataOption {
-            resolved: Some(Val::Integer(to)),
+            value: Val::Integer(to),
             ..
         }] => (*from, *to),
         _ => {
@@ -402,7 +378,7 @@ async fn queue_modify<F: FnOnce(usize, usize, &mut VecDeque<Queued>) -> String>(
     .await
 }
 
-async fn mv(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn mv(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     queue_modify(ctx, c, |from, to, x| {
         if let Some(song) = x.remove(from) {
             if to > x.len() {
@@ -418,7 +394,7 @@ async fn mv(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
     .await
 }
 
-async fn swap(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn swap(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     queue_modify(ctx, c, |from, to, x| {
         if from >= x.len() || to >= x.len() {
             format!("Failed: index out of bounds for {from} or {to}")
@@ -430,15 +406,22 @@ async fn swap(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult 
     .await
 }
 
+pub struct AuxMetadataKey;
+
+impl TypeMapKey for AuxMetadataKey {
+    type Value = AuxMetadata;
+}
+
 async fn play_common(
     ctx: &Context,
-    c: ApplicationCommandInteraction,
-    mk: fn(String) -> BoxFuture<'static, songbird::input::error::Result<Restartable>>,
+    h: &Handler,
+    c: CommandInteraction,
+    mk: fn(&Handler, String) -> Input,
     url: bool,
 ) -> CommandResult {
     let term = match &*c.data.options {
         [CommandDataOption {
-            resolved: Some(Val::String(url)),
+            value: Val::String(url),
             ..
         }] => url.clone(),
         _ => {
@@ -461,43 +444,41 @@ async fn play_common(
 
         return Ok(());
     }
+    c.create_response(ctx, CreateInteractionResponse::Defer(CreateInteractionResponseMessage::new().content("resolving"))).await?;
     common_voice(ctx, c, true, |handler_lock, c| async move {
         let mut handler = handler_lock.lock().await;
 
-        let input = match mk(term).await {
-            Ok(input) => input,
-            Err(why) => {
-                println!("Err starting source: {:?}", why);
-
-                simple_reply(&c, ctx, "error sourcing ffmpeg").await;
-
-                return Ok(());
-            }
-        };
-        let source: Input = input.into();
-        let track = format_metadata(&source.metadata);
-        handler.enqueue_source(source);
-        simple_reply(&c, ctx, &format!("Queued {track}.")).await;
+        let input = mk(h, term);
+        let mut source: Input = input.into();
+        let metadata = source.aux_metadata().await?;
+        let msg = format!(
+            "Queued: {}",
+            format_metadata(&metadata),
+        );
+        let handle = handler.enqueue_input(source).await;
+        handle.typemap().write().await.insert::<AuxMetadataKey>(metadata);
+        c.edit_response(ctx, EditInteractionResponse::new().content(msg)).await?;
         Ok(())
     })
     .await
 }
 
-async fn splay(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn splay(ctx: &Context, h: &Handler, c: CommandInteraction) -> CommandResult {
     play_common(
         ctx,
+        h,
         c,
-        |term| Box::pin(Restartable::ytdl_search(term, true)),
+        |h, term| YoutubeDl::new(h.client.clone(), format!("ytsearch1:{term}")).into(),
         false,
     )
     .await
 }
 
-async fn play(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
-    play_common(ctx, c, |url| Box::pin(Restartable::ytdl(url, true)), true).await
+async fn play(ctx: &Context, h: &Handler, c: CommandInteraction) -> CommandResult {
+    play_common(ctx, h, c, |h, url| YoutubeDl::new(h.client.clone(), url).into(), true).await
 }
 
-fn format_metadata(Metadata { title, artist, .. }: &Metadata) -> String {
+fn format_metadata(AuxMetadata { title, artist, .. }: &AuxMetadata) -> String {
     format!(
         "{} - {}",
         artist.as_deref().unwrap_or("unknown artist"),
@@ -520,7 +501,7 @@ fn format_duration(x: Duration) -> String {
     }
 }
 
-async fn queue(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn queue(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     common_voice(ctx, c, false, |handler, c| async move {
         let handler = handler.lock().await;
 
@@ -532,7 +513,8 @@ async fn queue(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult
 
         let mut reply = String::new();
         for (n, song) in handler.queue().current_queue().into_iter().enumerate() {
-            let metadata = song.metadata();
+            let map = song.typemap().read().await;
+            let metadata = map.get::<AuxMetadataKey>().unwrap();
             let duration = &metadata.duration;
             if !reply.is_empty() {
                 reply.push('\n');
@@ -563,10 +545,10 @@ async fn queue(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult
     .await
 }
 
-async fn remove(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn remove(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     let index = match &*c.data.options {
         [CommandDataOption {
-            resolved: Some(Val::Integer(i)),
+            value: Val::Integer(i),
             ..
         }] => (*i) as usize,
         _ => {
@@ -579,29 +561,33 @@ async fn remove(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResul
     common_voice(ctx, c, false, |handler, c| async move {
         let handler = handler.lock().await;
 
-        let message = handler.queue().modify_queue(|x| {
+        let result = handler.queue().modify_queue(|x| {
             if let Some(track) = x.remove(index) {
                 if let Err(e) = track.stop() {
-                    format!("Failed to stop track: {:?}", e)
+                    Err(format!("Failed to stop track: {:?}", e))
                 } else {
-                    format!(
-                        "Removed track: {}",
-                        track.metadata().title.as_deref().unwrap_or("unknown title")
-                    )
+                    Ok(track)
                 }
             } else {
-                format!("No track at index {}", index)
+                Err(format!("No track at index {index}"))
             }
         });
 
-        simple_reply(&c, ctx, &message).await;
+        match result {
+            Ok(track) => {
+                let map = track.typemap().read().await;
+                let metadata = map.get::<AuxMetadataKey>().unwrap();
+                simple_reply(&c, ctx, &format!("Removed: {}", format_metadata(metadata))).await;
+            }
+            Err(e) => simple_reply(&c, ctx, &e).await,
+        }
 
         Ok(())
     })
     .await
 }
 
-async fn undeafen(ctx: &Context, c: ApplicationCommandInteraction) -> CommandResult {
+async fn undeafen(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
     common_voice(ctx, c, false, |handler_lock, c| async move {
         let mut handler = handler_lock.lock().await;
         if let Err(e) = handler.deafen(false).await {
