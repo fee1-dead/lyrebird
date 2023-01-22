@@ -10,10 +10,10 @@ use serenity::all::{CommandDataOption, CommandDataOptionValue as Val, CommandInt
 use serenity::builder::{
     CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse,
 };
-use serenity::cache::GuildRef;
-use serenity::futures::future::BoxFuture;
+
+
 use serenity::gateway::ActivityData;
-use serenity::model::prelude::{Activity, Guild, GuildId, UserId};
+use serenity::model::prelude::{GuildId, UserId};
 use serenity::model::user::OnlineStatus;
 use serenity::prelude::Mutex;
 use songbird::tracks::Queued;
@@ -21,7 +21,7 @@ use songbird::typemap::TypeMapKey;
 // This trait adds the `register_songbird` and `register_songbird_with` methods
 // to the client builder below, making it easy to install this voice client.
 // The voice client can be retrieved in any command using `songbird::get(ctx).await`.
-use songbird::{Call, SerenityInit, Event, TrackEvent};
+use songbird::{Call, SerenityInit};
 
 // Import the `Context` to handle commands.
 use serenity::client::Context;
