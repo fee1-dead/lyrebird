@@ -16,12 +16,12 @@ use serenity::gateway::ActivityData;
 use serenity::model::prelude::{GuildId, UserId};
 use serenity::model::user::OnlineStatus;
 use serenity::prelude::Mutex;
-use songbird::tracks::Queued;
+use songbird::tracks::{Queued, PlayMode};
 use songbird::typemap::TypeMapKey;
 // This trait adds the `register_songbird` and `register_songbird_with` methods
 // to the client builder below, making it easy to install this voice client.
 // The voice client can be retrieved in any command using `songbird::get(ctx).await`.
-use songbird::{Call, SerenityInit};
+use songbird::{Call, SerenityInit, EventContext};
 
 // Import the `Context` to handle commands.
 use serenity::client::Context;
@@ -283,10 +283,34 @@ async fn try_join(
         .await
         .map_err(|_x| "songbird error")?;
 
+        handler.lock().await.add_global_event(songbird::Event::Track(songbird::TrackEvent::Error), ErrorHandler);
+
     // TODO: on first join we need to install some event handlers
     // h.lock().await.add_global_event(Event::Track(TrackEvent::Play), action);
 
     Ok(handler)
+}
+
+pub struct ErrorHandler;
+
+#[async_trait]
+impl songbird::EventHandler for ErrorHandler {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<songbird::Event> {
+        match ctx {
+            EventContext::Track(e) => {
+                for t in *e {
+                    match &t.0.playing {
+                        PlayMode::Errored(e) => {
+                            warn!(%e, "track errored");
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
 }
 
 async fn join(ctx: &Context, _: &Handler, c: CommandInteraction) -> CommandResult {
