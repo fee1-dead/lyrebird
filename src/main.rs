@@ -1,20 +1,8 @@
-use std::collections::VecDeque;
 use std::env;
-use std::future::Future;
 use std::num::NonZeroU64;
-use std::sync::Arc;
-use std::time::Duration;
 
 use serenity::model::prelude::UserId;
-use serenity::prelude::Mutex;
-use songbird::tracks::{PlayMode, Queued};
-use songbird::typemap::TypeMapKey;
-use songbird::{Call, EventContext};
-
-use serenity::{async_trait, prelude::GatewayIntents};
-use songbird::input::AuxMetadata;
-
-use tracing::warn;
+use serenity::prelude::GatewayIntents;
 
 type Error = color_eyre::Report;
 
@@ -40,7 +28,6 @@ macro_rules! commands {
 }
 
 pub(crate) use commands;
-use vc::enter_vc;
 
 pub struct Data {
     client: reqwest::Client,

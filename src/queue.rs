@@ -12,7 +12,7 @@ async fn queue_modify<F: FnOnce(&mut VecDeque<Queued>) -> String>(
     ctx: Context<'_>,
     f: F,
 ) -> CommandResult {
-    enter_vc(ctx, false, |handler_lock, c| async move {
+    enter_vc(ctx, false, |handler_lock, ctx| async move {
         let handler = handler_lock.lock().await;
         let m = handler.queue().modify_queue(f);
         ctx.say(&m).await?;
@@ -23,7 +23,7 @@ async fn queue_modify<F: FnOnce(&mut VecDeque<Queued>) -> String>(
 
 #[poise::command(slash_command)]
 async fn skip(ctx: Context<'_>) -> CommandResult {
-    enter_vc(ctx, false, |handler_lock, c| async move {
+    enter_vc(ctx, false, |handler_lock, ctx| async move {
         let handler = handler_lock.lock().await;
         if handler.queue().is_empty() {
             ctx.say("queue is empty").await?;
