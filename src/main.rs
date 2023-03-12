@@ -28,6 +28,7 @@ macro_rules! commands {
 }
 
 pub(crate) use commands;
+use songbird::SerenityInit;
 
 pub struct Data {
     client: reqwest::Client,
@@ -64,11 +65,16 @@ async fn main_inner() {
     tracing_subscriber::fmt::init();
 
     poise::FrameworkBuilder::default()
+        .client_settings(|c| c.register_songbird())
         .options(poise::FrameworkOptions {
             commands: all_commands(),
             owners: [UserId(NonZeroU64::new(468253584421552139).unwrap())]
                 .into_iter()
                 .collect(),
+            prefix_options: poise::PrefixFrameworkOptions {
+                prefix: Some("~".into()),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .token(env::var("DISCORD_TOKEN").expect("Expected a token in the environment"))

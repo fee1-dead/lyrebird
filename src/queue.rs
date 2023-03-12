@@ -1,12 +1,13 @@
 use std::collections::VecDeque;
 
+use rand::seq::SliceRandom;
 use songbird::tracks::Queued;
 
 use crate::metadata::{format_metadata, AuxMetadataKey};
 use crate::vc::enter_vc;
 use crate::{CommandResult, Context};
 
-crate::commands!(skip, mv, swap, remove);
+crate::commands!(skip, mv, swap, remove, clear, shuffle);
 
 async fn queue_modify<F: FnOnce(&mut VecDeque<Queued>) -> String>(
     ctx: Context<'_>,
@@ -85,11 +86,35 @@ async fn swap(
 }
 
 #[poise::command(slash_command)]
+async fn clear(ctx: Context<'_>) -> CommandResult {
+    queue_modify(ctx, |x| {
+        x.clear();
+        "Success".into()
+    })
+    .await
+}
+
+#[poise::command(slash_command)]
+async fn shuffle(ctx: Context<'_>) -> CommandResult {
+    queue_modify(ctx, |x| {
+        let slice = x.make_contiguous();
+        slice[1..].shuffle(&mut rand::thread_rng());
+        "Success".into()
+    })
+    .await
+}
+
+#[poise::command(slash_command)]
 async fn remove(
     ctx: Context<'_>,
     #[description = "which index to remove"] index: usize,
 ) -> CommandResult {
     enter_vc(ctx, false, |handler, ctx| async move {
+        if index == 0 {
+            ctx.say("Cannot remove the current song").await?;
+            return Ok(());
+        }
+
         let handler = handler.lock().await;
 
         let result = handler.queue().modify_queue(|x| {
