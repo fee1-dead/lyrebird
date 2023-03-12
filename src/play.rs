@@ -169,7 +169,7 @@ pub async fn playrange(
     let s = String::from_utf8(cmd.stdout)?;
     let outputs = s
         .lines()
-        .map(|l| serde_json::from_str::<Output>(l))
+        .map(serde_json::from_str::<Output>)
         .collect::<Result<Vec<_>, _>>()?;
     enter_vc(ctx, true, |handler, ctx| async move {
         let mut msg = None;

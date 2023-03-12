@@ -38,7 +38,7 @@ pub async fn retrieve_queue(h: &Call, page: usize) -> String {
         .current_queue()
         .get(range)
         .unwrap()
-        .into_iter()
+        .iter()
         .enumerate()
     {
         let n = n + start;
@@ -141,7 +141,10 @@ fn start_pagination(
 }
 
 #[poise::command(slash_command, prefix_command)]
-async fn queue(ctx: Context<'_>, page: Option<usize>) -> CommandResult {
+async fn queue(
+    ctx: Context<'_>,
+    #[description = "page number to display"] page: Option<usize>,
+) -> CommandResult {
     let page = page.map_or(0, |p| p - 1);
     enter_vc(ctx, false, |handler, ctx| async move {
         let hlock = handler.lock().await;

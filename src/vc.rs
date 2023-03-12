@@ -16,18 +16,12 @@ pub struct ErrorHandler;
 #[async_trait]
 impl songbird::EventHandler for ErrorHandler {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<songbird::Event> {
-        match ctx {
-            EventContext::Track(e) => {
-                for t in *e {
-                    match &t.0.playing {
-                        PlayMode::Errored(e) => {
-                            warn!(%e, "track errored");
-                        }
-                        _ => {}
-                    }
+        if let EventContext::Track(e) = ctx {
+            for t in *e {
+                if let PlayMode::Errored(e) = &t.0.playing {
+                    warn!(%e, "track errored");
                 }
             }
-            _ => {}
         }
         None
     }
