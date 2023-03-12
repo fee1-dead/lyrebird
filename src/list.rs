@@ -12,7 +12,7 @@ use serenity::prelude::Mutex;
 use songbird::Call;
 use tokio::spawn;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::error;
 
 use crate::metadata::{format_duration, format_metadata, AuxMetadataKey};
 use crate::vc::enter_vc;
@@ -74,54 +74,75 @@ pub async fn retrieve_queue(h: &Call, page: usize) -> String {
     reply
 }
 
-fn start_pagination(
+fn make_buttons(page: usize, len: usize) -> CreateActionRow {
+    CreateActionRow::Buttons(vec![
+        CreateButton::new("prev_page")
+            .emoji(ReactionType::Unicode("⬅️".into()))
+            .disabled(page == 0),
+        CreateButton::new("next_page")
+            .emoji(ReactionType::Unicode("➡️".into()))
+            .disabled(page + 1 >= calc_pages(len, 10)),
+        CreateButton::new("refresh").emoji('🔄'),
+    ])
+}
+
+async fn paginate(
     mut msg: Message,
+    ctx: &DiscordContext,
+    handler: Arc<Mutex<Call>>,
+    rxns: ComponentInteractionCollector,
+) -> Result<(), Error> {
+    let page = Arc::new(AtomicUsize::new(0));
+    let mut stream = rxns.stream();
+    while let Ok(Some(x)) = timeout(Duration::from_secs(120), stream.next()).await {
+        match &*x.data.custom_id {
+            "prev_page" => {
+                let new = page.load(Ordering::SeqCst).saturating_sub(1);
+                page.store(new, Ordering::SeqCst);
+            }
+            "next_page" => {
+                let new = page.load(Ordering::SeqCst).saturating_add(1);
+                page.store(new, Ordering::SeqCst);
+            }
+            "refresh" => {}
+            id => tracing::error!("invalid custom id: {id}"),
+        }
+
+        let pg = page.load(Ordering::SeqCst);
+        let h = handler.lock().await;
+        let len = h.queue().len();
+        let message = retrieve_queue(&h, pg).await;
+        drop(h);
+        let newmsg = EditMessage::new()
+            .content(message)
+            .components(vec![make_buttons(pg, len)]);
+        msg.edit(&ctx, newmsg).await?;
+        x.create_response(&ctx, CreateInteractionResponse::Acknowledge)
+            .await?;
+    }
+
+    msg.edit(&ctx, EditMessage::new().components(vec![]))
+        .await?;
+
+    Ok::<_, Error>(())
+}
+
+fn start_pagination(
+    msg: Message,
     ctx: DiscordContext,
     handler: Arc<Mutex<Call>>,
     rxns: ComponentInteractionCollector,
 ) {
     spawn(async move {
-        // Two minutes waiting on reactions
-        let x = timeout(Duration::from_secs(120), async move {
-            let page = Arc::new(AtomicUsize::new(0));
-            let mut stream = rxns.stream();
-            while let Some(x) = stream.next().await {
-                match &*x.data.custom_id {
-                    "prev_page" => {
-                        let new = page.load(Ordering::SeqCst).saturating_sub(1);
-                        page.store(new, Ordering::SeqCst);
-                    }
-                    "next_page" => {
-                        let new = page.load(Ordering::SeqCst).saturating_add(1);
-                        page.store(new, Ordering::SeqCst);
-                    }
-                    "refresh" => {}, 
-                    id => tracing::error!("invalid custom id: {id}"),
-                }
-
-                let pg = page.load(Ordering::SeqCst);
-                let h = handler.lock().await;
-                let len = h.queue().len();
-                let message = retrieve_queue(&h, pg).await;
-                drop(h);
-                let newmsg = EditMessage::new().content(message).components(vec![CreateActionRow::Buttons(vec![
-                    CreateButton::new("prev_page").emoji(ReactionType::Unicode("⬅️".into())).disabled(pg == 0),
-                    CreateButton::new("next_page").emoji(ReactionType::Unicode("➡️".into())).disabled(pg+1 >= calc_pages(len, 10)),
-                    CreateButton::new("refresh").emoji('🔄'),
-                ])]);
-                msg.edit(&ctx, newmsg).await?;
-                x.create_response(&ctx, CreateInteractionResponse::Acknowledge)
-                    .await?;
-            }
-            Ok::<_, Error>(())
-        })
-        .await;
-        info!(?x);
+        if let Err(e) = paginate(msg, &ctx, handler, rxns).await {
+            error!("error occured in pagination: {e}");
+        }
     });
 }
 
 #[poise::command(slash_command, prefix_command)]
-async fn queue(ctx: Context<'_>) -> CommandResult {
+async fn queue(ctx: Context<'_>, page: Option<usize>) -> CommandResult {
+    let page = page.map_or(0, |p| p - 1);
     enter_vc(ctx, false, |handler, ctx| async move {
         let hlock = handler.lock().await;
         let len = hlock.queue().len();
@@ -131,16 +152,12 @@ async fn queue(ctx: Context<'_>) -> CommandResult {
             ctx.say("queue is empty").await?;
             return Ok(());
         }
-        let text = retrieve_queue(&hlock, 0).await;
+        let text = retrieve_queue(&hlock, page).await;
         let msg = ctx
             .send(
                 CreateReply::new()
                     .content(text)
-                    .components(vec![CreateActionRow::Buttons(vec![
-                        CreateButton::new("prev_page").emoji(ReactionType::Unicode("⬅️".into())).disabled(true),
-                        CreateButton::new("next_page").emoji(ReactionType::Unicode("➡️".into())).disabled(len <= 10),
-                        CreateButton::new("refresh").emoji('🔄'),
-                    ])]),
+                    .components(vec![make_buttons(page, len)]),
             )
             .await?;
 
