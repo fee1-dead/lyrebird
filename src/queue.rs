@@ -87,9 +87,9 @@ async fn swap(
 
 #[poise::command(slash_command)]
 async fn clear(ctx: Context<'_>) -> CommandResult {
-    queue_modify(ctx, |x| {
-        x.clear();
-        "Success".into()
+    enter_vc(ctx, false, |call, _| async move {
+        call.lock().await.queue().stop();
+        Ok(())
     })
     .await
 }
