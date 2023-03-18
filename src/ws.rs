@@ -1,3 +1,6 @@
+// TODO remove this once WS is ready
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use std::time::Duration;
 

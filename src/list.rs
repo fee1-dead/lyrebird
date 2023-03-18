@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use poise::futures_util::StreamExt;
 use poise::serenity_prelude::{
-    ComponentInteractionCollector, Context as DiscordContext, CreateActionRow, CreateButton,
-    CreateInteractionResponse, EditMessage, Message, ReactionType,
+    ComponentInteractionCollector, CreateActionRow, CreateButton, CreateInteractionResponse,
+    EditMessage, Message, ReactionType,
 };
 use poise::CreateReply;
 use serenity::prelude::Mutex;
@@ -16,7 +16,7 @@ use tracing::error;
 
 use crate::metadata::{format_duration, format_metadata, AuxMetadataKey};
 use crate::vc::enter_vc;
-use crate::{CommandResult, Context, Error};
+use crate::{CommandResult, Context, DiscordContext, Error};
 
 crate::commands!(queue);
 
