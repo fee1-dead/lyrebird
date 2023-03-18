@@ -45,9 +45,41 @@ pub async fn splay(
     .await
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Output {
-    url: String,
+    pub url: String,
+    ie_key: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub channel: Option<String>,
+    _type: String,
+}
+
+impl Output {
+    pub fn is_playable(&self) -> bool {
+        self._type == "url" && !self.is_playlist()
+    }
+    pub fn is_playlist(&self) -> bool {
+        self.ie_key == "YoutubePlaylist" || self.ie_key == "YoutubeTab"
+    }
+}
+
+pub async fn play_multiple(
+    ctx: Context<'_>,
+    input: Vec<Input>,
+    handler: &mut songbird::Call,
+) -> CommandResult {
+    let mut cnt = 0usize;
+    let mut msg = None;
+    for input in input {
+        msg = Some(play_inner(ctx, input, handler, msg).await?);
+        cnt += 1;
+    }
+    if cnt > 1 {
+        maybe_edit(ctx, msg, format!("Queued {cnt} songs")).await?;
+    }
+    Ok(())
 }
 
 #[poise::command(slash_command)]
@@ -73,23 +105,16 @@ pub async fn playall(
     let s = String::from_utf8(cmd.stdout)?;
 
     enter_vc(ctx, true, |handler, ctx| async move {
-        let mut cnt = 0usize;
-        let mut msg = None;
-        for l in s.lines() {
-            let out = serde_json::from_str::<Output>(l)?;
-            let mut handler = handler.lock().await;
-            msg = Some(
-                play_inner(
-                    ctx,
-                    YoutubeDl::new(ctx.data().client.clone(), out.url).into(),
-                    &mut handler,
-                    msg,
-                )
-                .await?,
-            );
-            cnt += 1;
-        }
-        maybe_edit(ctx, msg, format!("Queued {cnt} songs")).await?;
+        let parsed = s
+            .lines()
+            .map(|x| serde_json::from_str::<Output>(x))
+            .collect::<Result<Vec<_>, _>>()?;
+        let inputs = parsed
+            .into_iter()
+            .filter(Output::is_playable)
+            .map(|x| YoutubeDl::new(ctx.data().client.clone(), x.url).into())
+            .collect::<Vec<_>>();
+        play_multiple(ctx, inputs, &mut *handler.lock().await).await?;
         Ok(())
     })
     .await?;
@@ -119,29 +144,23 @@ pub async fn playrand(
     let outputs = s
         .lines()
         .map(|l| serde_json::from_str::<Output>(l))
-        .collect::<Result<Vec<_>, _>>()?;
+        .filter_map(|x| x.ok().filter(|x| !x.is_playlist()))
+        .collect::<Vec<_>>();
     let chooser = outputs
         .choose_multiple(&mut thread_rng(), num)
         .cloned()
         .collect::<Vec<_>>();
     drop(outputs);
     enter_vc(ctx, true, |handler, ctx| async move {
-        let mut msg = None;
-        let len = chooser.len();
-        for c in chooser {
-            let mut handler = handler.lock().await;
-            msg = Some(
-                play_inner(
-                    ctx,
-                    YoutubeDl::new(ctx.data().client.clone(), c.url.clone()).into(),
-                    &mut handler,
-                    msg,
-                )
-                .await?,
-            );
-        }
-        maybe_edit(ctx, msg, format!("Queued {len} songs.")).await?;
-        Ok(())
+        play_multiple(
+            ctx,
+            chooser
+                .into_iter()
+                .map(|x| YoutubeDl::new(ctx.data().client.clone(), x.url).into())
+                .collect(),
+            &mut *handler.lock().await,
+        )
+        .await
     })
     .await
 }
@@ -171,23 +190,20 @@ pub async fn playrange(
         .lines()
         .map(serde_json::from_str::<Output>)
         .collect::<Result<Vec<_>, _>>()?;
+    let outputs = outputs
+        .into_iter()
+        .filter(|x| !x.is_playlist())
+        .collect::<Vec<_>>();
     enter_vc(ctx, true, |handler, ctx| async move {
-        let mut msg = None;
-        let len = outputs.len();
-        for c in outputs {
-            let mut handler = handler.lock().await;
-            msg = Some(
-                play_inner(
-                    ctx,
-                    YoutubeDl::new(ctx.data().client.clone(), c.url.clone()).into(),
-                    &mut handler,
-                    msg,
-                )
-                .await?,
-            );
-        }
-        maybe_edit(ctx, msg, format!("Queued {len} songs.")).await?;
-        Ok(())
+        play_multiple(
+            ctx,
+            outputs
+                .into_iter()
+                .map(|x| YoutubeDl::new(ctx.data().client.clone(), x.url).into())
+                .collect(),
+            &mut *handler.lock().await,
+        )
+        .await
     })
     .await
 }
