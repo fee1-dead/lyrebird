@@ -59,6 +59,8 @@ without a lower or upper bound are also supported. (`:3` means up to the third s
 from the third song)
 * `/playall <url>` Enqueues all songs from a playlist specified at the URL
 * `/playrand <url> <num>` Fetches all songs in the playlist, but take a random amount of songs from the list.
+* `/search <term> [num]` Searches a given term on YouTube and returns the first `num` results. `num` defaults to
+5 and cannot be greater than 25. Will include a selection menu for which songs in the result you'd like to enqueue.
 * `/queue [page]` Lists current songs queued. 10 songs are displayed per page. You can specify the page in the
 optional argument. By default displays the first page.
 * `/shuffle` - Shuffles the queue.
