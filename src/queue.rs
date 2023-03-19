@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use poise::CreateReply;
 use rand::seq::SliceRandom;
 use songbird::tracks::Queued;
 
@@ -91,7 +92,9 @@ async fn clear(ctx: Context<'_>) -> CommandResult {
         call.lock().await.queue().stop();
         Ok(())
     })
-    .await
+    .await?;
+    ctx.say("cleared queue").await?;
+    Ok(())
 }
 
 #[poise::command(slash_command)]
