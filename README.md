@@ -41,6 +41,12 @@ your bot respectively. See [this tutorial][adding bot to servers] on how to add 
 server. Make sure that "Message Content Intent" is set as enabled in the developer portal so the bot can
 read messages.
 
+You can use the following URL for adding your bot to your server:
+
+```
+https://discord.com/oauth2/authorize?client_id=XXXXXXX&permissions=549792514304&scope=bot%20applications.commands
+```
+
 After adding your bot to your server, you need to register the slash commands that the bot supports. Using
 the account that matches the `BOT_OWNER_ID`, you can run the `~register` command to either register it in
 the guild specificially or globally.
