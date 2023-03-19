@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 
-use poise::CreateReply;
 use rand::seq::SliceRandom;
 use songbird::tracks::Queued;
 

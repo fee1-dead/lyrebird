@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 use std::env;
 use std::num::NonZeroU64;
 
@@ -75,11 +73,16 @@ async fn main_inner() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
+    let bot_owner = env::var("BOT_OWNER_ID").expect("Please set BOT_OWNER_ID");
+    let bot_owner = UserId(
+        NonZeroU64::new(bot_owner.parse().expect("bot owner id not correctly set")).unwrap(),
+    );
+
     poise::FrameworkBuilder::default()
         .client_settings(|c| c.register_songbird())
         .options(poise::FrameworkOptions {
             commands: all_commands(),
-            owners: [UserId(NonZeroU64::new(468253584421552139).unwrap())]
+            owners: [bot_owner]
                 .into_iter()
                 .collect(),
             prefix_options: poise::PrefixFrameworkOptions {
