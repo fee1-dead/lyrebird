@@ -82,9 +82,7 @@ async fn main_inner() {
         .client_settings(|c| c.register_songbird())
         .options(poise::FrameworkOptions {
             commands: all_commands(),
-            owners: [bot_owner]
-                .into_iter()
-                .collect(),
+            owners: [bot_owner].into_iter().collect(),
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("~".into()),
                 ..Default::default()
