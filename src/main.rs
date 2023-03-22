@@ -1,10 +1,17 @@
 use std::env;
 use std::num::NonZeroU64;
+use std::sync::Arc;
 
+use reqwest::Client;
+use restart::CallData;
+use serenity::gateway::ActivityData;
 use serenity::model::prelude::UserId;
 use serenity::prelude::GatewayIntents;
 
-use songbird::SerenityInit;
+use songbird::id::{ChannelId, GuildId};
+use songbird::{SerenityInit, Songbird};
+use tokio::fs;
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
 type Error = color_eyre::Report;
@@ -21,6 +28,7 @@ mod list;
 mod metadata;
 mod play;
 mod queue;
+mod restart;
 mod search;
 mod track;
 mod vc;
@@ -56,6 +64,7 @@ fn all_commands() -> Vec<Command> {
     track::register_commands(&mut v);
     vc::register_commands(&mut v);
     queue::register_commands(&mut v);
+    restart::register_commands(&mut v);
     search::register_commands(&mut v);
 
     v.push(register());
@@ -68,8 +77,39 @@ pub async fn register(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
+async fn maybe_recover(ctx: &DiscordContext, client: Client) {
+    if let Ok(x) = env::var("RESTART_RECOVER_PATH") {
+        let songbird = songbird::get(ctx).await.unwrap();
+        tokio::spawn(async move {
+            if let Err(e) = maybe_recover_inner(songbird, x, client).await {
+                warn!("Error occured while recovering: {e}");
+            }
+        });
+    }
+}
+
+async fn maybe_recover_inner(songbird: Arc<Songbird>, path: String, client: Client) -> color_eyre::Result<()> {
+    let f = fs::read_to_string(&path).await?;
+    let _ = fs::remove_file(path).await;
+    let values: Vec<CallData> = serde_json::from_str(&f)?;
+    for CallData {
+        guild,
+        channel,
+        queue,
+    } in values
+    {
+        let Ok(call) = songbird.join(GuildId(guild), ChannelId(channel)).await else { continue; };
+        let mut handler = call.lock().await;
+        for q in queue {
+            let _ = play::enqueue(client.clone(), q, &mut *handler).await;
+        }
+    }
+    Ok(())
+}
+
 async fn main_inner() {
     tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
@@ -79,7 +119,9 @@ async fn main_inner() {
     );
 
     poise::FrameworkBuilder::default()
-        .client_settings(|c| c.register_songbird())
+        .client_settings(|c| {
+            c.register_songbird().activity(ActivityData::watching("you"))
+        })
         .options(poise::FrameworkOptions {
             commands: all_commands(),
             owners: [bot_owner].into_iter().collect(),
@@ -91,10 +133,12 @@ async fn main_inner() {
         })
         .token(env::var("DISCORD_TOKEN").expect("Expected a token in the environment"))
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
-        .user_data_setup(|_ctx, _ready, _framework| {
+        .user_data_setup(|ctx, _ready, _framework| {
             Box::pin(async move {
+                let client = reqwest::Client::new();
+                maybe_recover(ctx, client.clone()).await;
                 Ok(Data {
-                    client: reqwest::Client::new(),
+                    client,
                 })
             })
         })

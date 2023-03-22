@@ -3,10 +3,18 @@ use std::time::Duration;
 use serenity::prelude::TypeMapKey;
 use songbird::input::AuxMetadata;
 
+use crate::play::Queueable;
+
 pub struct AuxMetadataKey;
 
 impl TypeMapKey for AuxMetadataKey {
     type Value = AuxMetadata;
+}
+
+pub struct QueueableKey;
+
+impl TypeMapKey for QueueableKey {
+    type Value = Queueable;
 }
 
 pub fn format_metadata(AuxMetadata { title, artist, .. }: &AuxMetadata) -> String {

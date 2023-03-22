@@ -3,16 +3,46 @@ use std::process::Stdio;
 use poise::{CreateReply, ReplyHandle};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use songbird::input::{Input, YoutubeDl};
+use songbird::input::{Input, YoutubeDl, AuxMetadata};
 use tokio::process::Command;
 
-use crate::metadata::{format_metadata, AuxMetadataKey};
+use crate::metadata::{format_metadata, AuxMetadataKey, QueueableKey};
 use crate::{CommandResult, Context, Error};
 
 use crate::vc::enter_vc;
 
 crate::commands!(play, splay, playall, playrand, playrange);
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Queueable {
+    Ytdl { arg: String },
+}
+
+pub trait HasClient {
+    fn client(self) -> Client;
+}
+
+impl HasClient for Context<'_> {
+    fn client(self) -> Client {
+        self.data().client.clone()
+    }
+}
+
+impl HasClient for Client {
+    fn client(self) -> Client {
+        self
+    }
+}
+
+impl Queueable {
+    pub fn into_input(self, x: impl HasClient) -> Input {
+        match self {
+            Queueable::Ytdl { arg } => YoutubeDl::new(x.client(), arg).into(),
+        }
+    }
+}
 
 #[poise::command(slash_command)]
 /// Add a song to queue from the given URL.
@@ -20,13 +50,7 @@ pub async fn play(
     ctx: Context<'_>,
     #[description = "URL of song to play"] url: String,
 ) -> CommandResult {
-    play_common(
-        ctx,
-        url,
-        |h, url| YoutubeDl::new(h.data().client.clone(), url).into(),
-        false,
-    )
-    .await
+    play_common(ctx, url, |_, url| Queueable::Ytdl { arg: url }, false).await
 }
 
 #[poise::command(slash_command)]
@@ -39,7 +63,9 @@ pub async fn splay(
     play_common(
         ctx,
         keyword,
-        |h, term| YoutubeDl::new(h.data().client.clone(), format!("ytsearch1:{term}")).into(),
+        |_, term| Queueable::Ytdl {
+            arg: format!("ytsearch1:{term}"),
+        },
         false,
     )
     .await
@@ -67,7 +93,7 @@ impl Output {
 
 pub async fn play_multiple(
     ctx: Context<'_>,
-    input: Vec<Input>,
+    input: Vec<Queueable>,
     handler: &mut songbird::Call,
 ) -> CommandResult {
     let mut cnt = 0usize;
@@ -112,7 +138,7 @@ pub async fn playall(
         let inputs = parsed
             .into_iter()
             .filter(Output::is_playable)
-            .map(|x| YoutubeDl::new(ctx.data().client.clone(), x.url).into())
+            .map(|x| Queueable::Ytdl { arg: x.url })
             .collect::<Vec<_>>();
         play_multiple(ctx, inputs, &mut *handler.lock().await).await?;
         Ok(())
@@ -156,7 +182,7 @@ pub async fn playrand(
             ctx,
             chooser
                 .into_iter()
-                .map(|x| YoutubeDl::new(ctx.data().client.clone(), x.url).into())
+                .map(|x| Queueable::Ytdl { arg: x.url })
                 .collect(),
             &mut *handler.lock().await,
         )
@@ -199,7 +225,7 @@ pub async fn playrange(
             ctx,
             outputs
                 .into_iter()
-                .map(|x| YoutubeDl::new(ctx.data().client.clone(), x.url).into())
+                .map(|x| Queueable::Ytdl { arg: x.url })
                 .collect(),
             &mut *handler.lock().await,
         )
@@ -221,28 +247,33 @@ async fn maybe_edit<'a>(
     }
 }
 
+pub async fn enqueue(client: impl HasClient, q: Queueable, handler: &mut songbird::Call) -> color_eyre::Result<AuxMetadata> {
+    let mut input = q.clone().into_input(client);
+    let metadata = input.aux_metadata().await?;
+    let handle = handler.enqueue_input(input).await;
+    let mut typemap = handle.typemap().write().await;
+
+    typemap.insert::<AuxMetadataKey>(metadata.clone());
+    typemap.insert::<QueueableKey>(q);
+
+    Ok(metadata)
+}
+
 async fn play_inner<'a>(
     ctx: Context<'a>,
-    mut input: Input,
+    q: Queueable,
     handler: &mut songbird::Call,
     edit: Option<ReplyHandle<'a>>,
 ) -> Result<ReplyHandle<'a>, Error> {
-    let metadata = input.aux_metadata().await?;
+    let metadata = enqueue(ctx, q, handler).await?;
     let msg = format!("Queued: {}", format_metadata(&metadata));
-    let handle = handler.enqueue_input(input).await;
-    handle
-        .typemap()
-        .write()
-        .await
-        .insert::<AuxMetadataKey>(metadata);
-
     maybe_edit(ctx, edit, msg).await
 }
 
 async fn play_common(
     ctx: Context<'_>,
     term: String,
-    mk: fn(Context<'_>, String) -> Input,
+    mk: fn(Context<'_>, String) -> Queueable,
     url: bool,
 ) -> CommandResult {
     ctx.defer().await?;

@@ -36,8 +36,8 @@ you have tried to run this on Windows
 
 ## Running the bot
 
-Set the environment variables `BOT_OWNER_ID` and `DISCORD_TOKEN` to your Discord user ID and the token for
-your bot respectively. See [this tutorial][adding bot to servers] on how to add your bot to your discord
+Create a `config.toml` file according to the `config.toml.example`. Afterwards, run the bot using the
+`runner` crate. See [this tutorial][adding bot to servers] on how to add your bot to your discord
 server. Make sure that "Message Content Intent" is set as enabled in the developer portal so the bot can
 read messages.
 
@@ -48,8 +48,8 @@ https://discord.com/oauth2/authorize?client_id=XXXXXXX&permissions=549792514304&
 ```
 
 After adding your bot to your server, you need to register the slash commands that the bot supports. Using
-the account that matches the `BOT_OWNER_ID`, you can run the `~register` command to either register it in
-the guild specificially or globally.
+the account that matches the `owner_id` set in your config, you can run the `~register` command to either
+register it in the guild specificially or globally.
 
 # Commands
 

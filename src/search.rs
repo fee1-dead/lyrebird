@@ -8,14 +8,13 @@ use poise::serenity_prelude::{
 };
 use poise::CreateReply;
 use serenity::prelude::Mutex;
-use songbird::input::YoutubeDl;
 use songbird::Call;
 use tokio::process::Command;
 
 use tokio::time::timeout;
 use tracing::debug;
 
-use crate::play::{play_multiple, Output};
+use crate::play::{play_multiple, Output, Queueable};
 use crate::vc::enter_vc;
 use crate::{CommandResult, Context};
 
@@ -153,7 +152,9 @@ async fn handle_search_responses(
 
             let inputs = values
                 .iter()
-                .map(|x| YoutubeDl::new(ctx.data().client.clone(), results[*x].url.clone()).into())
+                .map(|x| Queueable::Ytdl {
+                    arg: results[*x].url.clone(),
+                })
                 .collect::<Vec<_>>();
 
             play_multiple(ctx, inputs, &mut *handler.lock().await).await?;
