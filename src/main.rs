@@ -88,7 +88,11 @@ async fn maybe_recover(ctx: &DiscordContext, client: Client) {
     }
 }
 
-async fn maybe_recover_inner(songbird: Arc<Songbird>, path: String, client: Client) -> color_eyre::Result<()> {
+async fn maybe_recover_inner(
+    songbird: Arc<Songbird>,
+    path: String,
+    client: Client,
+) -> color_eyre::Result<()> {
     let f = fs::read_to_string(&path).await?;
     let _ = fs::remove_file(path).await;
     let values: Vec<CallData> = serde_json::from_str(&f)?;
@@ -120,7 +124,8 @@ async fn main_inner() {
 
     poise::FrameworkBuilder::default()
         .client_settings(|c| {
-            c.register_songbird().activity(ActivityData::watching("you"))
+            c.register_songbird()
+                .activity(ActivityData::watching("you"))
         })
         .options(poise::FrameworkOptions {
             commands: all_commands(),
@@ -137,9 +142,7 @@ async fn main_inner() {
             Box::pin(async move {
                 let client = reqwest::Client::new();
                 maybe_recover(ctx, client.clone()).await;
-                Ok(Data {
-                    client,
-                })
+                Ok(Data { client })
             })
         })
         .run()

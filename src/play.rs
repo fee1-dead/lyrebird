@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use songbird::input::{Input, YoutubeDl, AuxMetadata};
+use songbird::input::{AuxMetadata, Input, YoutubeDl};
 use tokio::process::Command;
 
 use crate::metadata::{format_metadata, AuxMetadataKey, QueueableKey};
@@ -247,7 +247,11 @@ async fn maybe_edit<'a>(
     }
 }
 
-pub async fn enqueue(client: impl HasClient, q: Queueable, handler: &mut songbird::Call) -> color_eyre::Result<AuxMetadata> {
+pub async fn enqueue(
+    client: impl HasClient,
+    q: Queueable,
+    handler: &mut songbird::Call,
+) -> color_eyre::Result<AuxMetadata> {
     let mut input = q.clone().into_input(client);
     let metadata = input.aux_metadata().await?;
     let handle = handler.enqueue_input(input).await;
