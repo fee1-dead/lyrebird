@@ -9,14 +9,14 @@ struct Config {
     mode: String,
     owner_id: u64,
     debug: Option<Profile>,
-    production: Option<Profile>,
+    release: Option<Profile>,
 }
 
 impl Config {
     fn profile(&self) -> &Profile {
         match &*self.mode {
             "debug" => self.debug.as_ref().unwrap(),
-            "production" => self.production.as_ref().unwrap(),
+            "release" => self.release.as_ref().unwrap(),
             _ => panic!("Invalid mode"),
         }
     }

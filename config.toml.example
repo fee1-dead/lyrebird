@@ -1,8 +1,8 @@
-mode = "Debug"
+mode = "debug"
 owner_id = 468253584421552139
 
-[Debug]
+[debug]
 token = "Bot Token Here"
 
-[Production]
+[release]
 token = "Bot Token Here"
