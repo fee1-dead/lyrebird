@@ -27,7 +27,7 @@ branch = "serenity-next"
 
 [dependencies.songbird]
 git = "https://github.com/serenity-rs/songbird.git"
-branch = "next"
+rev = "da3706c3380dfa28da458dab9af8a2f525201b90"
 features = [ "builtin-queue" ]
 
 [dependencies.serenity]
