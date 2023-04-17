@@ -86,7 +86,8 @@ pub async fn help(
 ) -> Result<(), Error> {
     let config = poise::builtins::HelpConfiguration {
         extra_text_at_bottom: "\
-Type /help command for more info on a specific command.",
+Type /help command for more info on a specific command.\n\n\
+Source code available at: https://github.com/fee1-dead/lyrebird",
         ..Default::default()
     };
     poise::builtins::help(ctx, command.as_deref(), config).await?;
