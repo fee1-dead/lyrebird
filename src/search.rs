@@ -32,7 +32,7 @@ impl SearchResult {
     }
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Enqueue")]
 /// Returns a list of songs from a given search term.
 pub async fn search(
     ctx: Context<'_>,

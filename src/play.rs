@@ -44,7 +44,7 @@ impl Queueable {
     }
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Enqueue")]
 /// Add a song to queue from the given URL.
 pub async fn play(
     ctx: Context<'_>,
@@ -53,7 +53,8 @@ pub async fn play(
     play_common(ctx, url, |_, url| Queueable::Ytdl { arg: url }, false).await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Enqueue")]
+/// Play the first song from a given search term.
 pub async fn splay(
     ctx: Context<'_>,
     #[rest]
@@ -108,7 +109,7 @@ pub async fn play_multiple(
     Ok(())
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Enqueue")]
 /// Play all songs from a given playlist
 pub async fn playall(
     ctx: Context<'_>,
@@ -148,7 +149,7 @@ pub async fn playall(
     Ok(())
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Enqueue")]
 /// Play random songs from a given playlist
 pub async fn playrand(
     ctx: Context<'_>,
@@ -191,7 +192,7 @@ pub async fn playrand(
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Enqueue")]
 /// Play a range of songs from a playlist
 pub async fn playrange(
     ctx: Context<'_>,

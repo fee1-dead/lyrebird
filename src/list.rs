@@ -140,7 +140,8 @@ fn start_pagination(
     });
 }
 
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Queue")]
+/// List queue contents
 async fn queue(
     ctx: Context<'_>,
     #[description = "page number to display"] page: Option<usize>,

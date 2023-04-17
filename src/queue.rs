@@ -22,7 +22,8 @@ async fn queue_modify<F: FnOnce(&mut VecDeque<Queued>) -> String>(
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Queue")]
+/// Skip the current playing song in queue
 async fn skip(ctx: Context<'_>) -> CommandResult {
     enter_vc(ctx, false, |handler_lock, ctx| async move {
         let handler = handler_lock.lock().await;
@@ -37,7 +38,8 @@ async fn skip(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Queue")]
+/// Reorder a track in the queue
 async fn mv(
     ctx: Context<'_>,
     #[description = "move from where"] from: usize,
@@ -62,7 +64,8 @@ async fn mv(
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Queue")]
+/// Swap two tracks in the queue
 async fn swap(
     ctx: Context<'_>,
     #[description = "swap from"] a: usize,
@@ -85,7 +88,8 @@ async fn swap(
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Queue")]
+/// Stop the currently playing track and clear the queue.
 async fn clear(ctx: Context<'_>) -> CommandResult {
     enter_vc(ctx, false, |call, _| async move {
         call.lock().await.queue().stop();
@@ -96,7 +100,8 @@ async fn clear(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Queue")]
+/// Shuffle queued tracks.
 async fn shuffle(ctx: Context<'_>) -> CommandResult {
     queue_modify(ctx, |x| {
         let slice = x.make_contiguous();
@@ -106,7 +111,8 @@ async fn shuffle(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Queue")]
+/// Remove a track from the queue by its index.
 async fn remove(
     ctx: Context<'_>,
     #[description = "which index to remove"] index: usize,

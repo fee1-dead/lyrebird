@@ -77,6 +77,20 @@ pub async fn register(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
+#[poise::command(prefix_command, track_edits, slash_command)]
+pub async fn help(
+    ctx: Context<'_>,
+    #[description = "Specific command to show help about"] command: Option<String>,
+) -> Result<(), Error> {
+    let config = poise::builtins::HelpConfiguration {
+        extra_text_at_bottom: "\
+Type /help command for more info on a specific command.",
+        ..Default::default()
+    };
+    poise::builtins::help(ctx, command.as_deref(), config).await?;
+    Ok(())
+}
+
 async fn maybe_recover(ctx: &DiscordContext, client: Client) {
     if let Ok(x) = env::var("RESTART_RECOVER_PATH") {
         let songbird = songbird::get(ctx).await.unwrap();

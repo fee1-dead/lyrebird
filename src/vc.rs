@@ -111,7 +111,7 @@ pub async fn enter_vc<
     f(handler_lock, ctx).await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Controls")]
 async fn deafen(ctx: Context<'_>) -> CommandResult {
     enter_vc(ctx, false, |handler, c| async move {
         let mut handler = handler.lock().await;
@@ -128,7 +128,7 @@ async fn deafen(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Controls")]
 async fn undeafen(ctx: Context<'_>) -> CommandResult {
     enter_vc(ctx, false, |handler_lock, ctx| async move {
         let mut handler = handler_lock.lock().await;
@@ -143,7 +143,7 @@ async fn undeafen(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Controls")]
 async fn join(ctx: Context<'_>) -> CommandResult {
     match try_join(ctx, true).await {
         Ok(_) => {
@@ -156,7 +156,7 @@ async fn join(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, category = "Controls")]
 async fn leave(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
 
