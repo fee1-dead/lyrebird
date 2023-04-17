@@ -68,6 +68,8 @@ fn all_commands() -> Vec<Command> {
     search::register_commands(&mut v);
 
     v.push(register());
+    v.push(help());
+
     v
 }
 
