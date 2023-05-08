@@ -38,8 +38,8 @@ async fn skip(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
-#[poise::command(slash_command, category = "Queue")]
-#[rename = "move"] // TODO https://github.com/serenity-rs/poise/issues/168
+#[poise::command(slash_command, category = "Queue", rename = "move")]
+// TODO rename https://github.com/serenity-rs/poise/issues/168
 /// Reorder a track in the queue
 async fn r#move(
     ctx: Context<'_>,
