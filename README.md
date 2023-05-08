@@ -73,7 +73,7 @@ optional argument. By default displays the first page.
 * `/clear` - Stops the current song and clear all songs in the queue.
 * `/rm <index>` - Removes a specific song in the queue.
 * `/skip` - skips the current song and play the next one in queue.
-* `/mv <from> <to>` moves a song at the index to a new index.
+* `/move <from> <to>` moves a song at the index to a new index.
 * `/swap <a> <b>` swaps two songs' positions in the queue.
 * `/pause` pauses the current playback
 * `/resume` resumes the current song

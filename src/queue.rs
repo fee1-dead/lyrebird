@@ -7,7 +7,7 @@ use crate::metadata::{format_metadata, AuxMetadataKey};
 use crate::vc::enter_vc;
 use crate::{CommandResult, Context};
 
-crate::commands!(skip, mv, swap, remove, clear, shuffle);
+crate::commands!(skip, r#move, swap, remove, clear, shuffle);
 
 async fn queue_modify<F: FnOnce(&mut VecDeque<Queued>) -> String>(
     ctx: Context<'_>,
@@ -39,8 +39,9 @@ async fn skip(ctx: Context<'_>) -> CommandResult {
 }
 
 #[poise::command(slash_command, category = "Queue")]
+#[rename = "move"] // TODO https://github.com/serenity-rs/poise/issues/168
 /// Reorder a track in the queue
-async fn mv(
+async fn r#move(
     ctx: Context<'_>,
     #[description = "move from where"] from: usize,
     #[description = "move to where"] to: usize,

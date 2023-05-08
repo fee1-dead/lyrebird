@@ -48,6 +48,7 @@ impl TypeMapKey for LoopState {
 }
 
 #[poise::command(slash_command, category = "Controls")]
+#[rename = "loop"] // TODO https://github.com/serenity-rs/poise/issues/168
 /// Toggle loop mode for the current track
 async fn r#loop(ctx: Context<'_>) -> CommandResult {
     enter_vc(ctx, false, |handler, c| async move {
