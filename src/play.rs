@@ -134,7 +134,7 @@ pub async fn playall(
     enter_vc(ctx, true, |handler, ctx| async move {
         let parsed = s
             .lines()
-            .map(|x| serde_json::from_str::<Output>(x))
+            .map(serde_json::from_str::<Output>)
             .collect::<Result<Vec<_>, _>>()?;
         let inputs = parsed
             .into_iter()
@@ -170,7 +170,7 @@ pub async fn playrand(
     let s = String::from_utf8(cmd.stdout)?;
     let outputs = s
         .lines()
-        .map(|l| serde_json::from_str::<Output>(l))
+        .map(serde_json::from_str::<Output>)
         .filter_map(|x| x.ok().filter(|x| !x.is_playlist()))
         .collect::<Vec<_>>();
     let chooser = outputs
