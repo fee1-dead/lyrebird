@@ -28,7 +28,7 @@ pub struct SearchResult {
 
 impl SearchResult {
     pub fn title_or_url(&self) -> &str {
-        self.title.as_ref().map(|x| x.as_str()).unwrap_or(&self.url)
+        self.title.as_deref().unwrap_or(&self.url)
     }
 }
 
@@ -136,7 +136,7 @@ async fn handle_search_responses(
         // TODO replace with let chains
         if let ComponentInteractionDataKind::StringSelect { values } = &interaction.data.kind {
             let values = values
-                .into_iter()
+                .iter()
                 .map(|x| x.parse::<usize>())
                 .collect::<Result<Vec<_>, _>>()?;
             /*

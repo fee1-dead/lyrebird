@@ -21,13 +21,14 @@ tempfile = "3.4.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# TODO
 [dependencies.poise]
 git = "https://github.com/serenity-rs/poise"
-branch = "serenity-next"
+rev = "0fbce420d5aebd7f950b2fd3c508639d1af3e6c9"
 
 [dependencies.songbird]
 git = "https://github.com/serenity-rs/songbird.git"
-rev = "da3706c3380dfa28da458dab9af8a2f525201b90"
+branch = "next"
 features = [ "builtin-queue" ]
 
 [dependencies.serenity]

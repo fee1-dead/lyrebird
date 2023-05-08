@@ -122,7 +122,7 @@ async fn maybe_recover_inner(
         let Ok(call) = songbird.join(GuildId(guild), ChannelId(channel)).await else { continue; };
         let mut handler = call.lock().await;
         for q in queue {
-            let _ = play::enqueue(client.clone(), q, &mut *handler).await;
+            let _ = play::enqueue(client.clone(), q, &mut handler).await;
         }
     }
     Ok(())

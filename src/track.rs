@@ -37,6 +37,7 @@ async fn resume(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum LoopState {
     Disabled,
     Enabled,
@@ -58,15 +59,15 @@ async fn r#loop(ctx: Context<'_>) -> CommandResult {
             return Ok(());
         };
 
-        let map = current.typemap().write().await;
-        
-        let new_state = match map.get() {
+        let mut map = current.typemap().write().await;
+
+        let new_state = match map.get::<LoopState>() {
             Some(LoopState::Disabled) => LoopState::Enabled,
             Some(LoopState::Enabled) => LoopState::Disabled,
             None => LoopState::Enabled,
         };
 
-        map.insert(new_state);
+        map.insert::<LoopState>(new_state);
 
         drop(map);
 
@@ -80,6 +81,8 @@ async fn r#loop(ctx: Context<'_>) -> CommandResult {
                 c.say("Looping enabled").await?;
             }
         }
-        
-    }).await
+
+        Ok(())
+    })
+    .await
 }
