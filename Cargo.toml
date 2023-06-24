@@ -24,7 +24,7 @@ tempfile = "3.4.0"
 # TODO
 [dependencies.poise]
 git = "https://github.com/serenity-rs/poise"
-rev = "0fbce420d5aebd7f950b2fd3c508639d1af3e6c9"
+branch = "serenity-next"
 
 [dependencies.songbird]
 git = "https://github.com/serenity-rs/songbird.git"

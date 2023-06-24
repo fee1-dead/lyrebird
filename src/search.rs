@@ -101,7 +101,7 @@ pub async fn search(
     let len = options.len();
     let select = CreateSelectMenu::new("sel", CreateSelectMenuKind::String { options })
         .min_values(1)
-        .max_values(25.min(len as u64));
+        .max_values(25.min(len as u8));
     let msg = ctx
         .send(
             CreateReply::default()
