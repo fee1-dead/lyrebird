@@ -39,14 +39,18 @@ pub async fn restart(ctx: Context<'_>) -> CommandResult {
         // first pause playback in the queue
         handler.queue().pause()?;
 
-        let Some(ch) = handler.current_channel() else { continue; };
+        let Some(ch) = handler.current_channel() else {
+            continue;
+        };
 
-        let queue = handler.queue().modify_queue(|x| take(x));
+        let queue = handler.queue().modify_queue(take);
         let mut data = Vec::with_capacity(queue.len());
         for x in &queue {
             x.stop()?;
             let q = x.typemap().read().await;
-            let Some(q) = q.get::<QueueableKey>() else { continue; };
+            let Some(q) = q.get::<QueueableKey>() else {
+                continue;
+            };
             data.push(q.clone());
         }
         handler.leave().await?;

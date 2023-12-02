@@ -120,7 +120,9 @@ async fn maybe_recover_inner(
         queue,
     } in values
     {
-        let Ok(call) = songbird.join(GuildId(guild), ChannelId(channel)).await else { continue; };
+        let Ok(call) = songbird.join(GuildId(guild), ChannelId(channel)).await else {
+            continue;
+        };
         let mut handler = call.lock().await;
         for q in queue {
             let _ = play::enqueue(client.clone(), q, &mut handler).await;
@@ -137,7 +139,8 @@ async fn main_inner() {
 
     let bot_owner = env::var("BOT_OWNER_ID").expect("Please set BOT_OWNER_ID");
     let bot_owner = UserId::from(
-        NonZeroU64::new(bot_owner.parse().expect("bot owner id not correctly set")).expect("bot owner ID should be non-zero"),
+        NonZeroU64::new(bot_owner.parse().expect("bot owner id not correctly set"))
+            .expect("bot owner ID should be non-zero"),
     );
 
     let framework = poise::FrameworkBuilder::default()
@@ -161,6 +164,10 @@ async fn main_inner() {
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-    let client = ClientBuilder::new(token, intents).register_songbird().activity(ActivityData::watching("you")).framework(framework).await;
+    let client = ClientBuilder::new(token, intents)
+        .register_songbird()
+        .activity(ActivityData::watching("you"))
+        .framework(framework)
+        .await;
     client.unwrap().start().await.unwrap();
 }
