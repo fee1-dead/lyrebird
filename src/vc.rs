@@ -30,7 +30,7 @@ impl songbird::EventHandler for ErrorHandler {
 pub async fn try_join(ctx: Context<'_>, must_join: bool) -> Result<Arc<Mutex<Call>>, &'static str> {
     let guild = ctx.guild_id().unwrap();
     let user = ctx.author().id;
-    let manager = songbird::get(ctx.discord())
+    let manager = songbird::get(ctx.serenity_context())
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
@@ -44,7 +44,7 @@ pub async fn try_join(ctx: Context<'_>, must_join: bool) -> Result<Arc<Mutex<Cal
     }
 
     let channel_id = guild
-        .to_guild_cached(ctx.discord())
+        .to_guild_cached(&ctx)
         .unwrap()
         .voice_states
         .get(&user)
@@ -84,7 +84,7 @@ pub async fn enter_vc<
 ) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
 
-    let manager = songbird::get(ctx.discord())
+    let manager = songbird::get(ctx.serenity_context())
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
@@ -160,7 +160,7 @@ async fn join(ctx: Context<'_>) -> CommandResult {
 async fn leave(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
 
-    let manager = songbird::get(ctx.discord())
+    let manager = songbird::get(ctx.serenity_context())
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();

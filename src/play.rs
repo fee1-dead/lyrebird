@@ -241,7 +241,7 @@ async fn maybe_edit<'a>(
     msg: String,
 ) -> Result<ReplyHandle<'a>, Error> {
     if let Some(m) = prev {
-        m.edit(ctx, CreateReply::new().content(msg)).await?;
+        m.edit(ctx, CreateReply::default().content(msg)).await?;
         Ok(m)
     } else {
         Ok(ctx.say(msg).await?)

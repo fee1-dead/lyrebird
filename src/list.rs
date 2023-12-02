@@ -159,7 +159,7 @@ async fn queue(
         let text = retrieve_queue(&hlock, page).await;
         let msg = ctx
             .send(
-                CreateReply::new()
+                CreateReply::default()
                     .content(text)
                     .components(vec![make_buttons(page, len)]),
             )
@@ -167,11 +167,10 @@ async fn queue(
 
         drop(hlock);
 
-        let discord = ctx.discord();
         let msg = msg.into_message().await?;
 
-        let rxns = msg.await_component_interaction(ctx.discord());
-        start_pagination(msg, discord.clone(), handler, rxns);
+        let rxns = msg.await_component_interaction(ctx);
+        start_pagination(msg, ctx.serenity_context().clone(), handler, rxns);
 
         Ok(())
     })

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use poise::serenity_prelude::{
-    CacheHttp, ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow,
+    ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow,
     CreateInteractionResponse, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption,
     EditMessage, Message,
 };
@@ -112,7 +112,7 @@ pub async fn search(
         .into_message()
         .await?;
 
-    let collector = msg.await_component_interactions(ctx.discord());
+    let collector = msg.await_component_interactions(ctx);
 
     enter_vc(ctx, true, move |handler, ctx| async move {
         handle_search_responses(msg, ctx, handler, collector, results).await

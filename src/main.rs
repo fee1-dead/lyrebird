@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use reqwest::Client;
 use restart::CallData;
+use serenity::client::ClientBuilder;
 use serenity::gateway::ActivityData;
 use serenity::model::prelude::UserId;
 use serenity::prelude::GatewayIntents;
@@ -135,14 +136,17 @@ async fn main_inner() {
         .init();
 
     let bot_owner = env::var("BOT_OWNER_ID").expect("Please set BOT_OWNER_ID");
-    let bot_owner = UserId(
-        NonZeroU64::new(bot_owner.parse().expect("bot owner id not correctly set")).unwrap(),
+    let bot_owner = UserId::from(
+        NonZeroU64::new(bot_owner.parse().expect("bot owner id not correctly set")).expect("bot owner ID should be non-zero"),
     );
 
-    poise::FrameworkBuilder::default()
-        .client_settings(|c| {
-            c.register_songbird()
-                .activity(ActivityData::watching("you"))
+    let framework = poise::FrameworkBuilder::default()
+        .setup(|ctx, _ready, _framework| {
+            Box::pin(async move {
+                let client = reqwest::Client::new();
+                maybe_recover(ctx, client.clone()).await;
+                Ok(Data { client })
+            })
         })
         .options(poise::FrameworkOptions {
             commands: all_commands(),
@@ -153,16 +157,10 @@ async fn main_inner() {
             },
             ..Default::default()
         })
-        .token(env::var("DISCORD_TOKEN").expect("Expected a token in the environment"))
-        .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
-        .user_data_setup(|ctx, _ready, _framework| {
-            Box::pin(async move {
-                let client = reqwest::Client::new();
-                maybe_recover(ctx, client.clone()).await;
-                Ok(Data { client })
-            })
-        })
-        .run()
-        .await
-        .unwrap();
+        .build();
+
+    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let client = ClientBuilder::new(token, intents).register_songbird().activity(ActivityData::watching("you")).framework(framework).await;
+    client.unwrap().start().await.unwrap();
 }

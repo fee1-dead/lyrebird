@@ -32,7 +32,7 @@ pub async fn restart(ctx: Context<'_>) -> CommandResult {
         return Ok(());
     }
 
-    let songbird = songbird::get(ctx.discord()).await.unwrap();
+    let songbird = songbird::get(ctx.serenity_context()).await.unwrap();
     let mut calls = Vec::new();
     for (guild, call) in songbird.iter() {
         let mut handler = call.lock().await;
