@@ -13,7 +13,7 @@ use tokio::process::Command;
 
 use crate::metadata::format_metadata;
 use crate::track::TrackData;
-use crate::{CommandResult, Context, Error};
+use crate::{yt_dlp_extra_args, CommandResult, Context, Error};
 
 use crate::vc::enter_vc;
 
@@ -43,7 +43,9 @@ impl HasClient for Client {
 impl Queueable {
     pub fn into_input(self, x: impl HasClient) -> Input {
         match self {
-            Queueable::Ytdl { arg } => YoutubeDl::new(x.client(), arg).into(),
+            Queueable::Ytdl { arg } => YoutubeDl::new(x.client(), arg)
+                .user_args(yt_dlp_extra_args().to_vec())
+                .into(),
         }
     }
 }
@@ -121,6 +123,7 @@ pub async fn playall(
 ) -> CommandResult {
     ctx.defer().await?;
     let cmd = Command::new("yt-dlp")
+        .args(yt_dlp_extra_args())
         .arg("--flat-playlist")
         .arg("-s")
         .arg("-j")
@@ -162,6 +165,7 @@ pub async fn playrand(
 ) -> CommandResult {
     ctx.defer().await?;
     let cmd = Command::new("yt-dlp")
+        .args(yt_dlp_extra_args())
         .arg("--flat-playlist")
         .arg("-s")
         .arg("-j")
@@ -205,6 +209,7 @@ pub async fn playrange(
 ) -> CommandResult {
     ctx.defer().await?;
     let cmd = Command::new("yt-dlp")
+        .args(yt_dlp_extra_args())
         .arg("--flat-playlist")
         .arg("-s")
         .arg("-j")

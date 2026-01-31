@@ -1,6 +1,6 @@
 use std::env;
 use std::num::NonZeroU64;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use reqwest::Client;
 use restart::CallData;
@@ -34,6 +34,18 @@ mod search;
 mod track;
 mod vc;
 mod ws;
+
+pub fn yt_dlp_extra_args() -> &'static [String] {
+    static EXTRA_ARGS: LazyLock<Vec<String>> = LazyLock::new(|| {
+        // TODO make this an env var
+        if let Ok(true) = std::fs::exists("./cookies.firefox-private.txt") {
+            vec!["--cookies".into(), "./cookies.firefox-private.txt".into()]
+        } else {
+            vec![]
+        }
+    });
+    &EXTRA_ARGS
+}
 
 macro_rules! commands {
     ($($i: ident),*$(,)?) => {
