@@ -1,14 +1,18 @@
 use std::process::Stdio;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use poise::{CreateReply, ReplyHandle};
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::rng;
+use rand::seq::IndexedRandom;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use songbird::input::{AuxMetadata, Input, YoutubeDl};
+use songbird::tracks::Track;
 use tokio::process::Command;
 
-use crate::metadata::{format_metadata, AuxMetadataKey, QueueableKey};
+use crate::metadata::format_metadata;
+use crate::track::TrackData;
 use crate::{CommandResult, Context, Error};
 
 use crate::vc::enter_vc;
@@ -174,7 +178,7 @@ pub async fn playrand(
         .filter_map(|x| x.ok().filter(|x| !x.is_playlist()))
         .collect::<Vec<_>>();
     let chooser = outputs
-        .choose_multiple(&mut thread_rng(), num)
+        .choose_multiple(&mut rng(), num)
         .cloned()
         .collect::<Vec<_>>();
     drop(outputs);
@@ -255,12 +259,15 @@ pub async fn enqueue(
 ) -> color_eyre::Result<AuxMetadata> {
     let mut input = q.clone().into_input(client);
     let metadata = input.aux_metadata().await?;
-    let handle = handler.enqueue_input(input).await;
-    let mut typemap = handle.typemap().write().await;
-
-    typemap.insert::<AuxMetadataKey>(metadata.clone());
-    typemap.insert::<QueueableKey>(q);
-
+    let track = Track::new_with_data(
+        input,
+        Arc::new(TrackData {
+            metadata: metadata.clone(),
+            queueable: q,
+            is_loop_enabled: AtomicBool::new(false),
+        }),
+    );
+    handler.enqueue(track).await;
     Ok(metadata)
 }
 

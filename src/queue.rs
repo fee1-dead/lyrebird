@@ -3,7 +3,8 @@ use std::collections::VecDeque;
 use rand::seq::SliceRandom;
 use songbird::tracks::Queued;
 
-use crate::metadata::{format_metadata, AuxMetadataKey};
+use crate::metadata::format_metadata;
+use crate::track::TrackData;
 use crate::vc::enter_vc;
 use crate::{CommandResult, Context};
 
@@ -38,8 +39,7 @@ async fn skip(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
-#[poise::command(slash_command, category = "Queue", rename = "move")]
-// TODO rename https://github.com/serenity-rs/poise/issues/168
+#[poise::command(slash_command, category = "Queue")]
 /// Reorder a track in the queue
 async fn r#move(
     ctx: Context<'_>,
@@ -106,7 +106,7 @@ async fn clear(ctx: Context<'_>) -> CommandResult {
 async fn shuffle(ctx: Context<'_>) -> CommandResult {
     queue_modify(ctx, |x| {
         let slice = x.make_contiguous();
-        slice[1..].shuffle(&mut rand::thread_rng());
+        slice[1..].shuffle(&mut rand::rng());
         "Success".into()
     })
     .await
@@ -142,8 +142,8 @@ async fn remove(
 
         match result {
             Ok(track) => {
-                let map = track.typemap().read().await;
-                let metadata = map.get::<AuxMetadataKey>().unwrap();
+                let map = track.data::<TrackData>();
+                let metadata = &map.metadata;
                 ctx.say(&format!("Removed: {}", format_metadata(metadata)))
                     .await?;
             }

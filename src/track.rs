@@ -1,10 +1,19 @@
-use serenity::prelude::TypeMapKey;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use songbird::input::AuxMetadata;
 use tracing::warn;
 
+use crate::play::Queueable;
 use crate::vc::enter_vc;
 use crate::{CommandResult, Context};
 
 crate::commands!(pause, resume, r#loop);
+
+pub struct TrackData {
+    pub metadata: AuxMetadata,
+    pub queueable: Queueable,
+    pub is_loop_enabled: AtomicBool,
+}
 
 #[poise::command(slash_command, category = "Controls")]
 /// Pause the current track
@@ -37,18 +46,7 @@ async fn resume(ctx: Context<'_>) -> CommandResult {
     .await
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum LoopState {
-    Disabled,
-    Enabled,
-}
-
-impl TypeMapKey for LoopState {
-    type Value = LoopState;
-}
-
-#[poise::command(slash_command, category = "Controls", rename = "loop")]
-// TODO rename https://github.com/serenity-rs/poise/issues/168
+#[poise::command(slash_command, category = "Controls")]
 /// Toggle loop mode for the current track
 async fn r#loop(ctx: Context<'_>) -> CommandResult {
     enter_vc(ctx, false, |handler, c| async move {
@@ -60,27 +58,17 @@ async fn r#loop(ctx: Context<'_>) -> CommandResult {
             return Ok(());
         };
 
-        let mut map = current.typemap().write().await;
+        let map = current.data::<TrackData>();
 
-        let new_state = match map.get::<LoopState>() {
-            Some(LoopState::Disabled) => LoopState::Enabled,
-            Some(LoopState::Enabled) => LoopState::Disabled,
-            None => LoopState::Enabled,
-        };
-
-        map.insert::<LoopState>(new_state);
-
+        let was_previously_enabled = map.is_loop_enabled.fetch_not(Ordering::SeqCst);
         drop(map);
 
-        match new_state {
-            LoopState::Disabled => {
-                current.disable_loop()?;
-                c.say("Looping disabled").await?;
-            }
-            LoopState::Enabled => {
-                current.enable_loop()?;
-                c.say("Looping enabled").await?;
-            }
+        if was_previously_enabled {
+            current.disable_loop()?;
+            c.say("Looping disabled").await?;
+        } else {
+            current.enable_loop()?;
+            c.say("Looping enabled").await?;
         }
 
         Ok(())

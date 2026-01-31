@@ -14,7 +14,8 @@ use tokio::spawn;
 use tokio::time::timeout;
 use tracing::error;
 
-use crate::metadata::{format_duration, format_metadata, AuxMetadataKey};
+use crate::metadata::{format_duration, format_metadata};
+use crate::track::TrackData;
 use crate::vc::enter_vc;
 use crate::{CommandResult, Context, DiscordContext, Error};
 
@@ -42,8 +43,8 @@ pub async fn retrieve_queue(h: &Call, page: usize) -> String {
         .enumerate()
     {
         let n = n + start;
-        let map = song.typemap().read().await;
-        let metadata = map.get::<AuxMetadataKey>().unwrap();
+        let data = song.data::<TrackData>();
+        let metadata = &data.metadata;
         let duration = &metadata.duration;
         if !reply.is_empty() {
             reply.push('\n');

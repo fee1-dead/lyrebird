@@ -8,7 +8,10 @@
       (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in
         {
-          devShells.default = import ./shell.nix { inherit pkgs; };
+          devShells.default = with pkgs;
+            mkShell {
+              buildInputs = [ gcc pkg-config cmake libopus yt-dlp glibc ];
+            };
         }
       );
 }

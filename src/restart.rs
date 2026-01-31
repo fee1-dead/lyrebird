@@ -4,8 +4,8 @@ use std::num::NonZeroU64;
 
 use serde::{Deserialize, Serialize};
 
-use crate::metadata::QueueableKey;
 use crate::play::Queueable;
+use crate::track::TrackData;
 use crate::{CommandResult, Context};
 
 crate::commands!(restart);
@@ -47,11 +47,8 @@ pub async fn restart(ctx: Context<'_>) -> CommandResult {
         let mut data = Vec::with_capacity(queue.len());
         for x in &queue {
             x.stop()?;
-            let q = x.typemap().read().await;
-            let Some(q) = q.get::<QueueableKey>() else {
-                continue;
-            };
-            data.push(q.clone());
+            let q = x.data::<TrackData>().queueable.clone();
+            data.push(q);
         }
         handler.leave().await?;
         calls.push(CallData {
