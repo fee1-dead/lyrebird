@@ -182,7 +182,7 @@ pub async fn playrand(
         .filter_map(|x| x.ok().filter(|x| !x.is_playlist()))
         .collect::<Vec<_>>();
     let chooser = outputs
-        .choose_multiple(&mut rng(), num)
+        .sample(&mut rng(), num)
         .cloned()
         .collect::<Vec<_>>();
     drop(outputs);
